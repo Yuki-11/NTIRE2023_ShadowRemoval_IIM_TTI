@@ -9,6 +9,61 @@ This is the official implementation of the AAAI 2023 paper [ShadowFormer: Global
 * **Feb 18, 2023**: Release the training and testing codes.
 * **Feb 17, 2023**: Add the testing results and the description of our work.
 
+## Memo
+### 2023/02/24 inference.py作成  
+test画像のinferenceのためにinference.pyを作成した．  
+中身はtest.pyとほとんど同じ．testの画像が出力される．評価はなし
+
+```
+python inference.py \
+  --weights log/ShadowFormer_m_shadow1/models/model_best.pth \
+  --result_dir results/test_m_shadow1 \
+  --color_space rgb \
+  --gpus 3
+```
+
+### make_submit_zip.py作成
+提出zipを作成する  
+`submit/tmp`ディレクトリにzip元ディレクトリが作成される．
+
+```
+python make_submit_zip.py \
+  --result_dir results/test_m_shadow1 \
+  --file_name m_shadow1 \
+  --runtime 2.21 \
+  --ex_data 0
+```
+
+### image_resistration.py作成
+inputとgtを位置合わせする．inputとgtをそれぞれ特徴点抽出してホモグラフィ変換．  
+image_registrationディレクトリに結果を格納
+
+```
+# train
+python image_registration.py train
+# val
+python imgae_registration.py val
+```
+
+### 2023/02/25 mask_weighted_loss実装
+
+option追加  
+```
+--m_diff_alpha : float
+--m_shadow_alpha : float
+
+```
+
+### 学習コマンド
+```
+python train.py --warmup \
+  --env _hsv \
+  --color_space hsv
+  --gpu
+  
+```
+
+
 ## Introduction
 To trackle image shadow removal problem, we propose a novel transformer-based method, dubbed ShadowFormer, for exploiting non-shadow
 regions to help shadow region restoration. A multi-scale channel attention framework is employed to hierarchically
@@ -46,7 +101,11 @@ weights # pretrained model path -- Line 31
 ```
 2. Test the model
 ```python
-python test.py --save_images
+python test.py --cal_metrics \
+  --weights log/ShadowFormer_istd/models/model_best.pth \
+  --color_space rgb \
+  --gpus 3
+  --save_images 
 ```
 You can check the output in `./results`.
 

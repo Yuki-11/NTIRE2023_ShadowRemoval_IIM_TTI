@@ -16,20 +16,24 @@ class Options():
         parser.add_argument('--optimizer', type=str, default ='adamw', help='optimizer for training')
         parser.add_argument('--lr_initial', type=float, default=0.0002, help='initial learning rate')
         parser.add_argument('--weight_decay', type=float, default=0.02, help='weight decay')
-        parser.add_argument('--gpu', type=str, default='0', help='GPUs')
+        parser.add_argument('--gpu', type=str, default='2,3', help='GPUs')
         parser.add_argument('--arch', type=str, default ='ShadowFormer',  help='archtechture')
         parser.add_argument('--mode', type=str, default ='shadow',  help='image restoration mode')
+        parser.add_argument('--m_diff_alpha', type=float, default=0, help='diff image loss l1 weight')
+        parser.add_argument('--m_shadow_alpha', type=float, default=0, help='shadow mask loss l1 weight')
+        parser.add_argument('--color_space', type=str, default ='rgb',  
+                            choices=['rgb', 'bray', 'hsv', 'lab', 'luv', 'hls', 'yuv', 'xyz', 'ycrcb'], help='color space')
         
         # args for saving 
         parser.add_argument('--save_dir', type=str, default ='./log',  help='save dir')
         parser.add_argument('--save_images', action='store_true',default=False)
-        parser.add_argument('--env', type=str, default ='_istd',  help='env')
+        parser.add_argument('--env', type=str, default ='_m_shadow1',  help='env')
         parser.add_argument('--checkpoint', type=int, default=50, help='checkpoint')
 
         # args for Uformer
         parser.add_argument('--norm_layer', type=str, default ='nn.LayerNorm', help='normalize layer in transformer')
         parser.add_argument('--embed_dim', type=int, default=32, help='dim of emdeding features')
-        parser.add_argument('--win_size', type=int, default=10, help='window size of self-attention')
+        parser.add_argument('--win_size', type=int, default=4, help='window size of self-attention') # default : 10
         parser.add_argument('--token_projection', type=str, default='linear', help='linear/conv token projection')
         parser.add_argument('--token_mlp', type=str, default='leff', help='ffn/leff token mlp')
         parser.add_argument('--att_se', action='store_true', default=False, help='se after sa')
@@ -45,10 +49,10 @@ class Options():
         parser.add_argument('--vit_share', action='store_true', default=False, help='share vit module')
         
         # args for training
-        parser.add_argument('--train_ps', type=int, default=320, help='patch size of training sample')
+        parser.add_argument('--train_ps', type=int, default=640, help='patch size of training sample')
         parser.add_argument('--resume', action='store_true', default=False)
-        parser.add_argument('--train_dir', type=str, default ='../ISTD_Dataset/train',  help='dir of train data')
-        parser.add_argument('--val_dir', type=str, default ='../ISTD_Dataset/test',  help='dir of train data')
+        parser.add_argument('--train_dir', type=str, default ='datasets/official_warped/train',  help='dir of train data')
+        parser.add_argument('--val_dir', type=str, default ='datasets/official_warped/val',  help='dir of train data')
         parser.add_argument('--warmup', action='store_true', default=True, help='warmup')
         parser.add_argument('--warmup_epochs', type=int, default=3, help='epochs for warmup')
 

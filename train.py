@@ -113,16 +113,16 @@ else:
 
 
 ######### Loss ###########
-criterion = CharbonnierLoss().cuda()
+criterion = CharbonnierLoss(m_diff_alpha=opt.m_diff_alpha, m_shadow_alpha=opt.m_shadow_alpha).cuda()
 
 ######### DataLoader ###########
 print('===> Loading datasets')
 img_options_train = {'patch_size':opt.train_ps}
-train_dataset = get_training_data(opt.train_dir, img_options_train)
+train_dataset = get_training_data(opt.train_dir, img_options_train, color_space=opt.color_space)
 train_loader = DataLoader(dataset=train_dataset, batch_size=opt.batch_size, shuffle=True, 
         num_workers=opt.train_workers, pin_memory=True, drop_last=False)
 
-val_dataset = get_validation_data(opt.val_dir)
+val_dataset = get_validation_data(opt.val_dir, color_space=opt.color_space)
 val_loader = DataLoader(dataset=val_dataset, batch_size=1, shuffle=False,
         num_workers=opt.eval_workers, pin_memory=False, drop_last=False)
 
@@ -154,17 +154,21 @@ for epoch in range(start_epoch, opt.nepoch + 1):
         target = data[0].cuda()
         input_ = data[1].cuda()
         mask = data[2].cuda()
+        if 'official_warped' in opt.train_dir:
+            diff = data[3].cuda()
+        else:
+            diff = 0
         if epoch > 5:
             target, input_, mask = utils.MixUp_AUG().aug(target, input_, mask)
         with torch.cuda.amp.autocast():
             restored = model_restoration(input_, mask)
             restored = torch.clamp(restored,0,1)
-            loss = criterion(restored, target)
+            loss = criterion(restored, target, diff)
         loss_scaler(
                 loss, optimizer,parameters=model_restoration.parameters())
         epoch_loss +=loss.item()
         #### Evaluation ####
-        if (index+1)%eval_now==0 and i>0:
+        if (index+1)%eval_now==0 and i>0: # or True:
             eval_shadow_rmse = 0
             eval_nonshadow_rmse = 0
             eval_rmse = 0
@@ -179,7 +183,7 @@ for epoch in range(start_epoch, opt.nepoch + 1):
                     with torch.cuda.amp.autocast():
                         restored = model_restoration(input_, mask)
                     restored = torch.clamp(restored,0,1)
-                    psnr_val_rgb.append(utils.batch_PSNR(restored, target, False).item())
+                    psnr_val_rgb.append(utils.batch_PSNR(restored, target, False, color_space=opt.color_space).item())
 
                 psnr_val_rgb = sum(psnr_val_rgb)/len(val_loader)
                 if psnr_val_rgb > best_psnr:

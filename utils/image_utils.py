@@ -29,9 +29,10 @@ def load_npy(filepath):
     img = np.load(filepath)
     return img
 
-def load_img(filepath):
+def load_img(filepath, color_space='rgb'):
     img = cv2.cvtColor(cv2.imread(filepath), cv2.COLOR_BGR2RGB)
     # img = cv2.resize(img, [256, 256], interpolation=cv2.INTER_AREA)
+    img = convert_color_space(img, 'rgb', color_space)
     img = img.astype(np.float32)
     img = img/255.
     return img
@@ -57,6 +58,12 @@ def load_mask(filepath):
     img = img/255.
     return img
 
+def load_diff(filepath):
+    img = cv2.imread(filepath)
+    img = img.astype(np.float32)
+    img = img/255.
+    return img
+
 def load_val_mask(filepath):
     img = cv2.imread(filepath, 0)
     resized_img = img
@@ -65,8 +72,9 @@ def load_val_mask(filepath):
     resized_img = resized_img/255.
     return resized_img
 
-def save_img(img, filepath):
-    cv2.imwrite(filepath, cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
+def save_img(img, filepath, color_space='rgb'):
+    cvt_img = convert_color_space(img, color_space, 'rgb')
+    cv2.imwrite(filepath, cv2.cvtColor(cvt_img, cv2.COLOR_RGB2BGR))
 
 def myPSNR(tar_img, prd_img):
     imdff = torch.clamp(prd_img,0,1) - torch.clamp(tar_img,0,1)
@@ -74,10 +82,18 @@ def myPSNR(tar_img, prd_img):
     ps = 20*torch.log10(1/rmse)
     return ps
 
-def batch_PSNR(img1, img2, average=True):
+def myPSNR_np(tar_img, prd_img):
+    imdff = np.clip(prd_img,0,1) - np.clip(tar_img,0,1)
+    rmse = np.sqrt((imdff**2).mean())
+    ps = 20*np.log10(1/rmse)
+    return ps
+
+def batch_PSNR(img1, img2, average=True, color_space='rgb'):
     PSNR = []
     for im1, im2 in zip(img1, img2):
-        psnr = myPSNR(im1, im2)
+        im1_cvt = convert_color_space(im1.cpu().numpy().transpose((1, 2, 0)), color_space, 'rgb')
+        im2_cvt = convert_color_space(im2.cpu().numpy().transpose((1, 2, 0)), color_space, 'rgb')
+        psnr = myPSNR_np(im1_cvt, im2_cvt)
         PSNR.append(psnr)
     return sum(PSNR)/len(PSNR) if average else sum(PSNR)
 
@@ -130,3 +146,45 @@ def imsave(img, img_path):
 #     bias = torch.tensor([-16.0/255.0, -128.0/255.0, -128.0/255.0])
 #     temp = (im_flat + bias).mm(mat)
 #     out = temp.view(3, list(input_im.size())[1], list(input_im.size())[2])
+
+def convert_color_space(img: np, from_space='rgb', to_space='hsv'):
+    if from_space == to_space:
+        return img
+    enable_list = [
+        'bray',
+        'hsv',
+        'lab',
+        'luv',
+        'hls',
+        'yuv',
+        'xyz',
+        'ycrcb'
+    ]
+    assert ((from_space == 'rgb' and to_space in enable_list)
+            or (from_space in enable_list and to_space == 'rgb')), \
+            f'from_space: {from_space}, to_space: {to_space}, enable_list: {enable_list}'
+
+    rgb2x_dict = {
+        'bray': cv2.COLOR_RGB2GRAY,
+        'hsv': cv2.COLOR_RGB2HSV,
+        'lab': cv2.COLOR_RGB2Lab,
+        'luv': cv2.COLOR_RGB2Luv,
+        'hls': cv2.COLOR_RGB2HLS,
+        'yuv': cv2.COLOR_RGB2YUV,
+        'xyz': cv2.COLOR_RGB2XYZ,
+        'ycrcb': cv2.COLOR_RGB2YCrCb,
+    }
+    x2rgb_dict = {
+        'bray': cv2.COLOR_GRAY2RGB,
+        'hsv': cv2.COLOR_HSV2RGB,
+        'lab': cv2.COLOR_Lab2RGB,
+        'luv': cv2.COLOR_Luv2RGB,
+        'hls': cv2.COLOR_HLS2RGB,
+        'yuv': cv2.COLOR_YUV2RGB,
+        'xyz': cv2.COLOR_XYZ2RGB,
+        'ycrcb': cv2.COLOR_YCrCb2RGB,
+    }
+    if from_space == 'rgb':
+        return cv2.cvtColor(img, rgb2x_dict[to_space])
+    else:
+        return cv2.cvtColor(img, x2rgb_dict[from_space])
