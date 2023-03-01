@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import vision_transformer as vits
 
 
 def tv_loss(x, beta = 0.5, reg_coeff = 5):
@@ -40,14 +41,18 @@ class TVLoss(nn.Module):
 class CharbonnierLoss(nn.Module):
     """Charbonnier Loss (L1)"""
 
-    def __init__(self, eps=1e-3, m_diff_alpha=0, m_shadow_alpha=0):
+    def __init__(self, eps=1e-3, m_diff_alpha=0, m_shadow_alpha=0, color_space='rgb'):
         super(CharbonnierLoss, self).__init__()
         self.eps = eps
         self.m_diff_alpha = m_diff_alpha
         self.m_shadow_alpha = m_shadow_alpha
+        self.color_space = color_space
 
     def forward(self, x, y, mask=0, diff=0):
         xy_diff = x - y
+        # if self.color_space == 'hsv':
+        #     xy_diff[:, :, 0] = torch.min(xy_diff[:, :, 0], torch.abs(x[:, :, 0] + 1 - y[:, :, 0]))
+        #     xy_diff[:, :, 0] = torch.min(xy_diff[:, :, 0], torch.abs(x[:, :, 0] - 1 - y[:, :, 0]))
         A = torch.ones(*xy_diff.shape).cuda()
         # loss = torch.sum(torch.sqrt(xy_diff * xy_diff + self.eps))
         loss = torch.mean(torch.sqrt((A + self.m_diff_alpha * diff + self.m_shadow_alpha * mask) * (xy_diff * xy_diff) + (self.eps*self.eps)))
@@ -112,3 +117,24 @@ class SSIMLoss(nn.Module):
         kernel_2d = torch.matmul(kernel_1d.t(), kernel_1d)
         kernel_2d = kernel_2d.expand(3, 1, kernel_size, kernel_size).contiguous()
         return kernel_2d
+
+
+class DINOLoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+        # vits16 = torch.hub.load('facebookresearch/dino:main', 'dino_vits16')
+        patch_size = 16
+        self.deno_model = vits.__dict__["vit_small"](patch_size=patch_size, num_classes=0)
+        for p in self.deno_model.parameters():
+            p.requires_grad = False
+        self.deno_model.eval()
+        state_dict = torch.hub.load_state_dict_from_url(url="https://dl.fbaipublicfiles.com/dino/" + "dino_deitsmall16_pretrain/dino_deitsmall16_pretrain.pth")
+        self.deno_model.load_state_dict(state_dict, strict=True)
+
+    def forward(self, img1=None, img2=None):
+        _, key1 = self.deno_model.get_last_selfattention(img1, return_key=True)
+        _, key2 = self.deno_model.get_last_selfattention(img2, return_key=True)
+        b,c,h,w = img1.shape
+        return F.mse_loss(key1, key2) / (b*h*w) 
+
+

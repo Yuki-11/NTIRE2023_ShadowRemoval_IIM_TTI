@@ -16,11 +16,12 @@ class Options():
         parser.add_argument('--optimizer', type=str, default ='adamw', help='optimizer for training')
         parser.add_argument('--lr_initial', type=float, default=0.0002, help='initial learning rate')
         parser.add_argument('--weight_decay', type=float, default=0.02, help='weight decay')
-        parser.add_argument('--gpu', type=str, default='2,3', help='GPUs')
+        parser.add_argument('--gpu', type=str, default='2,3,0', help='GPUs')
         parser.add_argument('--arch', type=str, default ='ShadowFormer',  help='archtechture')
         parser.add_argument('--mode', type=str, default ='shadow',  help='image restoration mode')
         parser.add_argument('--m_diff_alpha', type=float, default=0, help='diff image loss l1 weight')
         parser.add_argument('--m_shadow_alpha', type=float, default=0, help='shadow mask loss l1 weight')
+        parser.add_argument('--dino_lambda', type=float, default=0, help='dino')
         parser.add_argument('--color_space', type=str, default ='rgb',  
                             choices=['rgb', 'bray', 'hsv', 'lab', 'luv', 'hls', 'yuv', 'xyz', 'ycrcb'], help='color space')
         

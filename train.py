@@ -33,7 +33,7 @@ from einops import rearrange, repeat
 import datetime
 from pdb import set_trace as stx
 from utils import save_img
-from losses import CharbonnierLoss
+from losses import CharbonnierLoss, DINOLoss
 
 from tqdm import tqdm 
 from warmup_scheduler import GradualWarmupScheduler
@@ -41,6 +41,7 @@ from torch.optim.lr_scheduler import StepLR
 from timm.utils import NativeScaler
 
 from utils.loader import get_training_data, get_validation_data
+from utils.image_utils import convert_color_space, imsave
 
 
 ######### Logs dir ###########
@@ -113,7 +114,8 @@ else:
 
 
 ######### Loss ###########
-criterion = CharbonnierLoss(m_diff_alpha=opt.m_diff_alpha, m_shadow_alpha=opt.m_shadow_alpha).cuda()
+criterion = CharbonnierLoss(m_diff_alpha=opt.m_diff_alpha, m_shadow_alpha=opt.m_shadow_alpha, color_space=opt.color_space).cuda()
+dino = DINOLoss().cuda()
 
 ######### DataLoader ###########
 print('===> Loading datasets')
@@ -162,8 +164,18 @@ for epoch in range(start_epoch, opt.nepoch + 1):
             target, input_, mask = utils.MixUp_AUG().aug(target, input_, mask)
         with torch.cuda.amp.autocast():
             restored = model_restoration(input_, mask)
-            restored = torch.clamp(restored,0,1)
-            loss = criterion(restored, target, diff)
+            if opt.color_space == 'hsv':
+                restored[:, :, 0] = input_[:, :, 0]
+                restored[:, :, 1] = input_[:, :, 1]
+                restored[:, :, 2] = torch.clamp(restored[:, :, 2],0,1)
+            else:
+                restored = torch.clamp(restored,0,1)
+            loss_cr = criterion(restored, target, diff)
+            if opt.dino_lambda:
+                loss_dino = dino(restored, target)
+            else:
+                loss_dino = 0
+            loss = loss_cr + opt.dino_lambda * loss_dino
         loss_scaler(
                 loss, optimizer,parameters=model_restoration.parameters())
         epoch_loss +=loss.item()
@@ -175,6 +187,7 @@ for epoch in range(start_epoch, opt.nepoch + 1):
             with torch.no_grad():
                 model_restoration.eval()
                 psnr_val_rgb = []
+                result_dir = os.path.join(log_dir, 'results', )
                 for ii, data_val in enumerate((val_loader), 0):
                     target = data_val[0].cuda()
                     input_ = data_val[1].cuda()
@@ -182,8 +195,15 @@ for epoch in range(start_epoch, opt.nepoch + 1):
                     filenames = data_val[3]
                     with torch.cuda.amp.autocast():
                         restored = model_restoration(input_, mask)
-                    restored = torch.clamp(restored,0,1)
+                    if opt.color_space == 'hsv':
+                        restored[:, :, 0] = input_[:, :, 0]
+                        restored[:, :, 1] = input_[:, :, 1]
+                        restored[:, :, 2] = torch.clamp(restored[:, :, 2],0,1)
+                    else:
+                        restored = torch.clamp(restored,0,1)
                     psnr_val_rgb.append(utils.batch_PSNR(restored, target, False, color_space=opt.color_space).item())
+                    rgb_restored = convert_color_space(restored, opt.color_space, 'rgb')
+                    utils.save_img(rgb_restored*255.0, os.path.join(opt.result_dir, filenames[0]))
 
                 psnr_val_rgb = sum(psnr_val_rgb)/len(val_loader)
                 if psnr_val_rgb > best_psnr:

@@ -104,8 +104,10 @@ weights # pretrained model path -- Line 31
 python test.py --cal_metrics \
   --weights log/ShadowFormer_istd/models/model_best.pth \
   --color_space rgb \
-  --gpus 3
-  --save_images 
+  --gpus 1 \
+  --result_dir results/val_hsv2 \
+  --save_images \
+  --cal_metrics
 ```
 You can check the output in `./results`.
 

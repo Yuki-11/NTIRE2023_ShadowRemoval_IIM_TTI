@@ -3,10 +3,10 @@ __pycache__/
 
 datasets/
 results/
-
+tmp/
 log/
 submit/
 
 image_registration/
 
-
+*.pth

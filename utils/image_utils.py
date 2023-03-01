@@ -32,9 +32,9 @@ def load_npy(filepath):
 def load_img(filepath, color_space='rgb'):
     img = cv2.cvtColor(cv2.imread(filepath), cv2.COLOR_BGR2RGB)
     # img = cv2.resize(img, [256, 256], interpolation=cv2.INTER_AREA)
-    img = convert_color_space(img, 'rgb', color_space)
     img = img.astype(np.float32)
     img = img/255.
+    img = convert_color_space(img, 'rgb', color_space)
     return img
 
 def load_val_img(filepath):
@@ -93,6 +93,10 @@ def batch_PSNR(img1, img2, average=True, color_space='rgb'):
     for im1, im2 in zip(img1, img2):
         im1_cvt = convert_color_space(im1.cpu().numpy().transpose((1, 2, 0)), color_space, 'rgb')
         im2_cvt = convert_color_space(im2.cpu().numpy().transpose((1, 2, 0)), color_space, 'rgb')
+        # cv2.imwrite(f'tmp/pred.png', im1_cvt * 255)
+        # cv2.imwrite(f'tmp/gt.png', im2_cvt * 255)
+        imsave(im1_cvt * 255, f'tmp/pred.png')
+        imsave(im2_cvt * 255, f'tmp/gt.png')
         psnr = myPSNR_np(im1_cvt, im2_cvt)
         PSNR.append(psnr)
     return sum(PSNR)/len(PSNR) if average else sum(PSNR)
