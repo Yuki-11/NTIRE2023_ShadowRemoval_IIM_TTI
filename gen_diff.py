@@ -11,7 +11,7 @@ import torch
 parser = argparse.ArgumentParser(description='RGB denoising evaluation on the validation set of SIDD')
 parser.add_argument('--first_dir', default='results/test_m_diff2',
     type=str, help='Directory to compare(first)')
-parser.add_argument('--second_dir', default='results/test_warped_model_finish',
+parser.add_argument('--second_dir', default='datasets/official_warped/val/gt',
     type=str, help='Directory to compare(second)')
 parser.add_argument('--output_dir', default='',
     type=str, help='Output directory(default: {--first_dir}/diff_{--second_dir})')
@@ -29,7 +29,7 @@ os.makedirs(output_dir, exist_ok=True)
 
 psnr_list = []
 print('PSNR')
-for first_path, second_path in zip(first_dir.iterdir(), second_dir.iterdir()):
+for first_path, second_path in zip(sorted(first_dir.iterdir()), sorted(second_dir.iterdir())):
     img_first = cv2.imread(str(first_path))
     img_second = cv2.imread(str(second_path))
 

@@ -16,10 +16,10 @@ test画像のinferenceのためにinference.pyを作成した．
 
 ```
 python inference.py \
-  --weights log/ShadowFormer_m_shadow1/models/model_best.pth \
-  --result_dir results/test_m_shadow1 \
+  --weights log/ShadowFormer_dino1e6/models/model_best.pth \
+  --result_dir results/test_dino1e6 \
   --color_space rgb \
-  --gpus 3
+  --gpus 1
 ```
 
 ### make_submit_zip.py作成
@@ -61,6 +61,10 @@ python train.py --warmup \
   --color_space hsv
   --gpu
   
+python train.py --warmup \
+  --env _dino1e5 \
+  --dino_lambda 1e5
+  --gpu
 ```
 
 
@@ -102,10 +106,10 @@ weights # pretrained model path -- Line 31
 2. Test the model
 ```python
 python test.py --cal_metrics \
-  --weights log/ShadowFormer_istd/models/model_best.pth \
+  --weights log/ShadowFormer_dino1e6/models/model_best.pth \
   --color_space rgb \
   --gpus 1 \
-  --result_dir results/val_hsv2 \
+  --result_dir results/val_dino1e6 \
   --save_images \
   --cal_metrics
 ```

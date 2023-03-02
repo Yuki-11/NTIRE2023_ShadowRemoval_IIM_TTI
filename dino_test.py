@@ -3,7 +3,7 @@ import torch
 # from torchinfo import summary
 from torchvision import transforms as pth_transforms
 from PIL import Image
-
+import time
 
 batch_size=1
 patch_size = 16
@@ -11,7 +11,8 @@ patch_size = 16
 # summary(model=vits16, input_size=(batch_size, 3, 1980, 1440))
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-loss_model = DINOLoss()
+loss_model = DINOLoss(loss_type="cs")
+loss_model.cuda()
 # loss_model.to(device)
 
 def read_img(image_path):
@@ -30,18 +31,19 @@ def read_img(image_path):
     return img
 
 for i in range(900, 1000):
+    t1 = time.time()
     # img1 = read_img(f"/home/kondo/shadow_removal/NTIRE2023_ShadowRemoval_IIM_TTI/datasets/official_warped/train/input/{str(i).zfill(4)}.png")
     # img2 = read_img(f"/home/kondo/shadow_removal/NTIRE2023_ShadowRemoval_IIM_TTI/datasets/official_warped/train/gt/{str(i).zfill(4)}.png")
     # img1 = read_img(f"/home/kondo/shadow_removal/NTIRE2023_ShadowRemoval_IIM_TTI/results/val_warped/{str(i).zfill(4)}.png")
-    img2 = read_img(f"/home/kondo/shadow_removal/NTIRE2023_ShadowRemoval_IIM_TTI/datasets/official_warped/val/input/{str(i).zfill(4)}.png")
-    img1 = read_img(f"/home/kondo/shadow_removal/NTIRE2023_ShadowRemoval_IIM_TTI/datasets/official_warped/val/gt/{str(i).zfill(4)}.png")
+    img1 = read_img(f"/home/kondo/shadow_removal/NTIRE2023_ShadowRemoval_IIM_TTI/datasets/official_warped/val/input/{str(i).zfill(4)}.png")
+    img2 = read_img(f"/home/kondo/shadow_removal/NTIRE2023_ShadowRemoval_IIM_TTI/datasets/official_warped/val/gt/{str(i).zfill(4)}.png")
     # img2 = read_img(f"/home/kondo/shadow_removal/NTIRE2023_ShadowRemoval_IIM_TTI/results/val_warped/{str(i).zfill(4)}.png")
 
-    # img1.to(device)
-    # img2.to(device)
+    img1 = img1.cuda()
+    img2 = img2.cuda()
     # print(img1.device)
     # attentions = model.get_last_selfattention(img.to(device))
 
     loss = loss_model(img1, img2)
 
-    print(i, loss)
+    print(i, loss.item(), time.time()-t1)

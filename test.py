@@ -129,22 +129,11 @@ with torch.no_grad():
         # rgb_restored = torch.clamp(rgb_restored, 0, 1).cpu().numpy().squeeze().transpose((1, 2, 0))
         rgb_restored = rgb_restored.cpu().numpy().squeeze().transpose((1, 2, 0))
         rgb_noisy = rgb_noisy.cpu().numpy().squeeze().transpose((1, 2, 0))
-        print(rgb_restored[0, 0:3])
-        # print(np.min(rgb_restored, axis=2))
-        # print(np.max(rgb_restored, axis=2))
-        # print(rgb_gt[0, 0:3])
-        # print(np.max(rgb_gt, axis=2))
-        # print(np.max(rgb_gt, axis=2))
         if args.color_space == 'hsv':
             rgb_restored[:, :, 0] = rgb_noisy[:, :, 0]
             rgb_restored[:, :, 1] = rgb_noisy[:, :, 1]
             rgb_noisy[:, :, 2] = rgb_gt[:, :, 2]
-            # rgb_restored[:, :, 1] = rgb_gt[:, :, 1]
-            # rgb_restored[:, :, 2] = rgb_gt[:, :, 2]
-            # rgb_restored[:, :, 0] %= 1
-            # rgb_gt[:, :, 0] %= 1
             rgb_restored[:, :, 2] = np.clip(rgb_restored[:, :, 2], 0, 1)
-            print(rgb_restored[0, 0:3])
         else:
             rgb_restored = np.clip(rgb_restored, 0, 1)
         rgb_restored = convert_color_space(rgb_restored, args.color_space, 'rgb')
@@ -181,8 +170,6 @@ with torch.no_grad():
 
 
         if args.save_images:
-            utils.save_img(rgb_gt*255.0, os.path.join(args.result_dir, f'gt-{filenames[0]}'), color_space='rgb') #, color_space=args.color_space)
-            utils.save_img(rgb_noisy*255.0, os.path.join(args.result_dir, f'input-{filenames[0]}'), color_space='rgb') #, color_space=args.color_space)
             utils.save_img(rgb_restored*255.0, os.path.join(args.result_dir, filenames[0]), color_space='rgb') #, color_space=args.color_space)
 
 if args.cal_metrics:

@@ -146,7 +146,7 @@ ii=0
 index = 0
 for epoch in range(start_epoch, opt.nepoch + 1):
     epoch_start_time = time.time()
-    epoch_loss = 0
+    epoch_loss = {'crite': 0, 'dino': 0}
     train_id = 1
     epoch_ssim_loss = 0
     for i, data in enumerate(train_loader, 0): 
@@ -165,29 +165,31 @@ for epoch in range(start_epoch, opt.nepoch + 1):
         with torch.cuda.amp.autocast():
             restored = model_restoration(input_, mask)
             if opt.color_space == 'hsv':
-                restored[:, :, 0] = input_[:, :, 0]
-                restored[:, :, 1] = input_[:, :, 1]
-                restored[:, :, 2] = torch.clamp(restored[:, :, 2],0,1)
+                restored = torch.clamp(restored,0,1)
+                loss_cr = criterion(restored[:, 2], target[:, 2])
             else:
                 restored = torch.clamp(restored,0,1)
-            loss_cr = criterion(restored, target, diff)
+                loss_cr = criterion(restored, target, diff)
+            epoch_loss['crite'] += loss_cr.item()
+
             if opt.dino_lambda:
                 loss_dino = dino(restored, target)
+                loss = loss_cr + opt.dino_lambda * loss_dino
+                epoch_loss['dino'] += loss_dino.item()
             else:
-                loss_dino = 0
-            loss = loss_cr + opt.dino_lambda * loss_dino
+                loss = loss_cr
         loss_scaler(
                 loss, optimizer,parameters=model_restoration.parameters())
-        epoch_loss +=loss.item()
         #### Evaluation ####
-        if (index+1)%eval_now==0 and i>0: # or True:
+        if (index+1)%eval_now==0 and i>0:# or True:
             eval_shadow_rmse = 0
             eval_nonshadow_rmse = 0
             eval_rmse = 0
             with torch.no_grad():
                 model_restoration.eval()
                 psnr_val_rgb = []
-                result_dir = os.path.join(log_dir, 'results', )
+                result_dir = os.path.join(log_dir, 'results', str(epoch))
+                os.makedirs(result_dir, exist_ok=True)
                 for ii, data_val in enumerate((val_loader), 0):
                     target = data_val[0].cuda()
                     input_ = data_val[1].cuda()
@@ -196,15 +198,17 @@ for epoch in range(start_epoch, opt.nepoch + 1):
                     with torch.cuda.amp.autocast():
                         restored = model_restoration(input_, mask)
                     if opt.color_space == 'hsv':
-                        restored[:, :, 0] = input_[:, :, 0]
-                        restored[:, :, 1] = input_[:, :, 1]
-                        restored[:, :, 2] = torch.clamp(restored[:, :, 2],0,1)
+                        restored[:, 0] = input_[:, 0]
+                        restored[:, 1] = input_[:, 1]
+                        restored[:, 2] = torch.clamp(restored[:, 2],0,1)
                     else:
                         restored = torch.clamp(restored,0,1)
                     psnr_val_rgb.append(utils.batch_PSNR(restored, target, False, color_space=opt.color_space).item())
-                    rgb_restored = convert_color_space(restored, opt.color_space, 'rgb')
-                    utils.save_img(rgb_restored*255.0, os.path.join(opt.result_dir, filenames[0]))
-
+                    if filenames[0] in ['0902.png', '0908.png', '0960.png', '0989.png']:
+                        restored = restored.cpu().numpy().squeeze().transpose((1, 2, 0))
+                        rgb_restored = convert_color_space(restored, opt.color_space, 'rgb')
+                        utils.save_img(rgb_restored*255.0, os.path.join(result_dir, filenames[0]))
+    
                 psnr_val_rgb = sum(psnr_val_rgb)/len(val_loader)
                 if psnr_val_rgb > best_psnr:
                     best_psnr = psnr_val_rgb
@@ -222,11 +226,22 @@ for epoch in range(start_epoch, opt.nepoch + 1):
                 torch.cuda.empty_cache()
     scheduler.step()
     
+    line_log = ""
+    line_log += f"Epoch: {epoch}\tTime: {time.time() - epoch_start_time:d}\t"
+    if epoch_loss['crite']:
+        line_log += f"(crite): {epoch_loss['crite']:.3f}\t"
+    if epoch_loss['dino']:
+        line_log += f"(dino): {epoch_loss['dino']:.3e}\t"
+    line_log += f"LearningRate {scheduler.get_lr()[0]:.6f}"
+
     print("------------------------------------------------------------------")
-    print("Epoch: {}\tTime: {:.4f}\tLoss: {:.4f}\tLearningRate {:.6f}".format(epoch, time.time()-epoch_start_time,epoch_loss,scheduler.get_lr()[0]))
+    # print("Epoch: {}\tTime: {:.4f}\tLoss: {:.4f}\tLearningRate {:.6f}".format(epoch, time.time()-epoch_start_time,epoch_loss,scheduler.get_lr()[0]))
+    print(line_log)
     print("------------------------------------------------------------------")
     with open(logname,'a') as f:
-        f.write("Epoch: {}\tTime: {:.4f}\tLoss: {:.4f}\tLearningRate {:.6f}".format(epoch, time.time()-epoch_start_time,epoch_loss, scheduler.get_lr()[0])+'\n')
+        # f.write("Epoch: {}\tTime: {:.4f}\tLoss: {:.4f}\tLearningRate {:.6f}".format(epoch, time.time()-epoch_start_time,epoch_loss, scheduler.get_lr()[0])+'\n')
+        f.write(line_log)
+        f.write('\n')
 
     torch.save({'epoch': epoch, 
                 'state_dict': model_restoration.state_dict(),

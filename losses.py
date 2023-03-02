@@ -120,7 +120,7 @@ class SSIMLoss(nn.Module):
 
 
 class DINOLoss(nn.Module):
-    def __init__(self):
+    def __init__(self, loss_type="mse"):
         super().__init__()
         # vits16 = torch.hub.load('facebookresearch/dino:main', 'dino_vits16')
         patch_size = 16
@@ -130,11 +130,37 @@ class DINOLoss(nn.Module):
         self.deno_model.eval()
         state_dict = torch.hub.load_state_dict_from_url(url="https://dl.fbaipublicfiles.com/dino/" + "dino_deitsmall16_pretrain/dino_deitsmall16_pretrain.pth")
         self.deno_model.load_state_dict(state_dict, strict=True)
+        if loss_type == "mse":
+            self.loss_func = self._mse_loss
+        elif loss_type == "cs":
+            self.loss_func = self._cs_loss
 
-    def forward(self, img1=None, img2=None):
+    def _cosine_sim(self, key):
+        # 分子計算
+        kk = torch.matmul(key, key.permute(0, 1, 3, 2))
+        # 分母計算
+        key_abs = torch.norm(key, p = 2, dim = 3).unsqueeze(dim = -1)
+        kk_abs = torch.matmul(key_abs, key_abs.permute(0, 1, 3, 2))
+        # 類似度計算
+        return 1. - kk / kk_abs 
+
+    def _mse_loss(self, key1, key2):
+        return F.mse_loss(key1, key2) 
+    
+    def _cs_loss(self, key1, key2):
+        s1 = self._cosine_sim(key1)
+        s2 = self._cosine_sim(key2)  # [b, heads, n_patches, n_patches]
+        return torch.norm(s1 - s2, p="fro")
+
+    def forward(self, img1, img2):
         _, key1 = self.deno_model.get_last_selfattention(img1, return_key=True)
         _, key2 = self.deno_model.get_last_selfattention(img2, return_key=True)
+        # [b, num_heads, num_patches+1, 64]. [1,6,10801,64]
+        #+1はクラス識別などのトークン？
         b,c,h,w = img1.shape
-        return F.mse_loss(key1, key2) / (b*h*w) 
+        pixes = b*h*w
+        loss = self.loss_func(key1, key2) / pixes
+        return loss
+    
 
 
