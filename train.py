@@ -146,7 +146,7 @@ ii=0
 index = 0
 for epoch in range(start_epoch, opt.nepoch + 1):
     epoch_start_time = time.time()
-    epoch_loss = {'crite': 0, 'dino': 0}
+    epoch_loss = {'crite': 0, 'dino': 0, 'sum': 0}
     train_id = 1
     epoch_ssim_loss = 0
     for i, data in enumerate(train_loader, 0): 
@@ -178,6 +178,7 @@ for epoch in range(start_epoch, opt.nepoch + 1):
                 epoch_loss['dino'] += loss_dino.item()
             else:
                 loss = loss_cr
+            epoch_loss['sum'] += loss.item()
         loss_scaler(
                 loss, optimizer,parameters=model_restoration.parameters())
         #### Evaluation ####
@@ -227,12 +228,11 @@ for epoch in range(start_epoch, opt.nepoch + 1):
     scheduler.step()
     
     line_log = ""
-    line_log += f"Epoch: {epoch}\tTime: {time.time() - epoch_start_time:d}\t"
+    line_log += f"Epoch: {epoch}\tTime: {time.time() - epoch_start_time:.3f}\tLearningRate {scheduler.get_lr()[0]:.6f}\nLoss: {epoch_loss['sum']:.4f}\t"
     if epoch_loss['crite']:
-        line_log += f"(crite): {epoch_loss['crite']:.3f}\t"
+        line_log += f"(crite): {epoch_loss['crite']:.4f}\t"
     if epoch_loss['dino']:
-        line_log += f"(dino): {epoch_loss['dino']:.3e}\t"
-    line_log += f"LearningRate {scheduler.get_lr()[0]:.6f}"
+        line_log += f"(dino): {epoch_loss['dino']:.4e}\t"
 
     print("------------------------------------------------------------------")
     # print("Epoch: {}\tTime: {:.4f}\tLoss: {:.4f}\tLearningRate {:.6f}".format(epoch, time.time()-epoch_start_time,epoch_loss,scheduler.get_lr()[0]))
@@ -240,7 +240,7 @@ for epoch in range(start_epoch, opt.nepoch + 1):
     print("------------------------------------------------------------------")
     with open(logname,'a') as f:
         # f.write("Epoch: {}\tTime: {:.4f}\tLoss: {:.4f}\tLearningRate {:.6f}".format(epoch, time.time()-epoch_start_time,epoch_loss, scheduler.get_lr()[0])+'\n')
-        f.write(line_log)
+        f.write(line_log.replace('\n', '\t'))
         f.write('\n')
 
     torch.save({'epoch': epoch, 

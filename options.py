@@ -16,7 +16,7 @@ class Options():
         parser.add_argument('--optimizer', type=str, default ='adamw', help='optimizer for training')
         parser.add_argument('--lr_initial', type=float, default=0.0002, help='initial learning rate')
         parser.add_argument('--weight_decay', type=float, default=0.02, help='weight decay')
-        parser.add_argument('--gpu', type=str, default='1,2,3,4,7,8,9', help='GPUs')
+        parser.add_argument('--gpu', type=str, default='2,3,0', help='GPUs')
         parser.add_argument('--arch', type=str, default ='ShadowFormer',  help='archtechture')
         parser.add_argument('--mode', type=str, default ='shadow',  help='image restoration mode')
         parser.add_argument('--m_diff_alpha', type=float, default=0, help='diff image loss l1 weight')
