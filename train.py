@@ -146,7 +146,7 @@ ii=0
 index = 0
 for epoch in range(start_epoch, opt.nepoch + 1):
     epoch_start_time = time.time()
-    epoch_loss = {'crite': 0, 'dino': 0, 'sum': 0}
+    epoch_loss = {'crite': 0, 'dino': 0, 'self_rep': 0, 'sum': 0}
     train_id = 1
     epoch_ssim_loss = 0
     for i, data in enumerate(train_loader, 0): 
@@ -162,6 +162,29 @@ for epoch in range(start_epoch, opt.nepoch + 1):
             diff = 0
         if epoch > 5:
             target, input_, mask = utils.MixUp_AUG().aug(target, input_, mask)
+
+        # self-representation learning 
+        if opt.self_rep_lambda:
+            with torch.cuda.amp.autocast():
+                target_mask = torch.zeros_like(mask).cuda()
+                restored = model_restoration(target, mask)
+                if opt.color_space == 'hsv':
+                    restored = torch.clamp(restored,0,1)
+                    loss_cr = criterion(restored[:, 2], target[:, 2])
+                else:
+                    restored = torch.clamp(restored,0,1)
+                    loss_cr = criterion(restored, target, diff)
+                
+                if opt.dino_lambda:
+                    loss_dino = dino(restored, target)
+                    loss = loss_cr + opt.dino_lambda * loss_dino
+                else:
+                    loss = loss_cr
+            epoch_loss['self_rep'] += loss.item()
+            loss = loss * opt.self_rep_lambda
+            loss_scaler(
+                    loss, optimizer,parameters=model_restoration.parameters())
+
         with torch.cuda.amp.autocast():
             restored = model_restoration(input_, mask)
             if opt.color_space == 'hsv':
@@ -232,7 +255,14 @@ for epoch in range(start_epoch, opt.nepoch + 1):
     if epoch_loss['crite']:
         line_log += f"(crite): {epoch_loss['crite']:.4f}\t"
     if epoch_loss['dino']:
+<<<<<<< HEAD
         line_log += f"(dino): {epoch_loss['dino']:.4e}\t"
+=======
+        line_log += f"(dino): {epoch_loss['dino']:.3e}\t"
+    if epoch_loss['self_rep']:
+        line_log += f"(self_rep): {epoch_loss['self_rep']:.3e}\t"
+    line_log += f"LearningRate {scheduler.get_lr()[0]:.6f}"
+>>>>>>> self-representation
 
     print("------------------------------------------------------------------")
     # print("Epoch: {}\tTime: {:.4f}\tLoss: {:.4f}\tLearningRate {:.6f}".format(epoch, time.time()-epoch_start_time,epoch_loss,scheduler.get_lr()[0]))
