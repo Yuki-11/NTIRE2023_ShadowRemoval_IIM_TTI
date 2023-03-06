@@ -22,9 +22,12 @@ class Options():
         parser.add_argument('--m_diff_alpha', type=float, default=0, help='diff image loss l1 weight')
         parser.add_argument('--m_shadow_alpha', type=float, default=0, help='shadow mask loss l1 weight')
         parser.add_argument('--dino_lambda', type=float, default=0, help='dino')
+        parser.add_argument('--seam_lambda', type=float, default=0, help='seam')
         parser.add_argument('--color_space', type=str, default ='rgb',  
                             choices=['rgb', 'bray', 'hsv', 'lab', 'luv', 'hls', 'yuv', 'xyz', 'ycrcb'], help='color space')
-        parser.add_argument('--self_rep_lambda', type=float, default=0, help='size of self-representation loss. When it is 0, this loss is not used.')
+        parser.add_argument('--self_rep_lambda', type=float, default=0, help='weight of self-representation loss. When it is 0, this loss is not used.')
+        parser.add_argument('--self_rep_once', action='store_true', default=False, help='backward default mse loss and self_rep loss same time')
+        parser.add_argument('--self_feature_lambda', type=float, default=0, help='weight of feature loss')
         parser.add_argument('--mask_dir',type=str, default='mask', help='mask directory')
         
         # args for saving 

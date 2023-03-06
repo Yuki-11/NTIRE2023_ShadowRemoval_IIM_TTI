@@ -22,6 +22,7 @@ torch.backends.cudnn.benchmark = True
 # device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 # print(device)
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from natsort import natsorted
@@ -33,7 +34,7 @@ from einops import rearrange, repeat
 import datetime
 from pdb import set_trace as stx
 from utils import save_img
-from losses import CharbonnierLoss, DINOLoss
+from losses import CharbonnierLoss, DINOLoss, SeamLoss
 
 from tqdm import tqdm 
 from warmup_scheduler import GradualWarmupScheduler
@@ -146,10 +147,10 @@ ii=0
 index = 0
 for epoch in range(start_epoch, opt.nepoch + 1):
     epoch_start_time = time.time()
-    epoch_loss = {'crite': 0, 'dino': 0, 'self_rep': 0, 'sum': 0}
+    epoch_loss = {'crite': 0, 'dino': 0, 'self_rep': 0, 'ft':0, 'sum': 0}
     train_id = 1
     epoch_ssim_loss = 0
-    pbar = tqdm(train_loader, ncols=100)
+    pbar = tqdm(train_loader, ncols=140)
     for i, data in enumerate(pbar, 0): 
         epoch_loss_formatted = dict()
         for key, value in epoch_loss.items():
@@ -173,31 +174,31 @@ for epoch in range(start_epoch, opt.nepoch + 1):
             target, input_, mask = utils.MixUp_AUG().aug(target, input_, mask)
 
         # self-representation learning 
-        # if opt.self_rep_lambda:
-        #     loss_self = 0.0
-        #     with torch.cuda.amp.autocast():
-        #         target_mask = torch.zeros_like(mask).cuda()
-        #         restored = model_restoration(target, target_mask)
-        #         restored = torch.clamp(restored,0,1)
-        #         if opt.color_space == 'hsv':
-        #             loss_self = loss_self + criterion(restored[:, 2], target[:, 2])
-        #         else:
-        #             loss_self = loss_self + criterion(restored, target, diff)
+        if opt.self_rep_lambda and not opt.self_rep_once:
+            loss_self = 0.0
+            with torch.cuda.amp.autocast():
+                target_mask = torch.zeros_like(mask).cuda()
+                restored, feature_target = model_restoration(target, target_mask)
+                restored = torch.clamp(restored,0,1)
+                if opt.color_space == 'hsv':
+                    loss_self = loss_self + criterion(restored[:, 2], target[:, 2])
+                else:
+                    loss_self = loss_self + criterion(restored, target, diff)
                 
-        #         if opt.dino_lambda:
-        #             loss_dino = dino(restored, target)
-        #             loss_self = loss_self + opt.dino_lambda * loss_dino
-        #     epoch_loss['self_rep'] += loss_self.item()
-        #     loss_self = loss_self * opt.self_rep_lambda
-        #     epoch_loss['sum'] += loss_self.item()
-        #     loss_scaler(
-        #             loss_self, optimizer,parameters=model_restoration.parameters())
+                if opt.dino_lambda:
+                    loss_dino = dino(restored, target)
+                    loss_self = loss_self + opt.dino_lambda * loss_dino
+            epoch_loss['self_rep'] += loss_self.item()
+            loss_self = loss_self * opt.self_rep_lambda
+            epoch_loss['sum'] += loss_self.item()
+            loss_scaler(
+                    loss_self, optimizer,parameters=model_restoration.parameters())
 
         with torch.cuda.amp.autocast():
-            if opt.self_rep_lambda:
+            if opt.self_rep_lambda and opt.self_rep_once:
                 loss_self = 0.0
                 target_mask = torch.zeros_like(mask).cuda()
-                restored = model_restoration(target, target_mask)
+                restored, feature_target = model_restoration(target, target_mask)
                 restored = torch.clamp(restored,0,1)
                 if opt.color_space == 'hsv':
                     loss_self = loss_self + criterion(restored[:, 2], target[:, 2])
@@ -209,7 +210,7 @@ for epoch in range(start_epoch, opt.nepoch + 1):
                 epoch_loss['self_rep'] += loss_self.item()
                 loss = loss + loss_self * opt.self_rep_lambda
 
-            restored = model_restoration(input_, mask)
+            restored, feature_input = model_restoration(input_, mask)
             restored = torch.clamp(restored,0,1)
             if opt.color_space == 'hsv':
                 loss_cr = criterion(restored[:, 2], target[:, 2])
@@ -222,6 +223,13 @@ for epoch in range(start_epoch, opt.nepoch + 1):
                 loss_dino = dino(restored, target)
                 loss = loss + opt.dino_lambda * loss_dino
                 epoch_loss['dino'] += loss_dino.item()
+
+            if opt.self_feature_lambda:
+                # print(feature_target.shape, feature_input.shape)
+                loss_feature = F.mse_loss(feature_target, feature_input)
+                loss = loss + opt.self_feature_lambda * loss_feature
+                epoch_loss['ft'] += loss_feature.item()
+            
             epoch_loss['sum'] += loss.item()
         loss_scaler(
                 loss, optimizer,parameters=model_restoration.parameters())
@@ -279,6 +287,8 @@ for epoch in range(start_epoch, opt.nepoch + 1):
         line_log += f"(dino): {epoch_loss['dino']:.4e}\t"
     if epoch_loss['self_rep']:
         line_log += f"(self_rep): {epoch_loss['self_rep']:.3e}\t"
+    if epoch_loss['ft']:
+        line_log += f"(ft): {epoch_loss['ft']:.3e}\t"    
     # line_log += f"LearningRate {scheduler.get_lr()[0]:.6f}"
 
     print("------------------------------------------------------------------")

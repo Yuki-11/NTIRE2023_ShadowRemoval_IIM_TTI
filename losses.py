@@ -162,5 +162,17 @@ class DINOLoss(nn.Module):
         loss = self.loss_func(key1, key2) / pixes
         return loss
     
+    
+class SeamLoss(nn.Module):
+    def __init__(self, loss_type="charbonnier"):
+        super().__init__()
+        if loss_type == "charbonnier":
+            self.loss_func = CharbonnierLoss()
+        elif loss_type == "ssim":
+            self.loss_func =  SSIMLoss()
+    
+    def forward(self, img1, img2):
+        
+        return loss
 
 
