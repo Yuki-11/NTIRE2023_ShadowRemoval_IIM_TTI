@@ -75,7 +75,7 @@ start_epoch = 1
 if opt.optimizer.lower() == 'adam':
     optimizer = optim.Adam(model_restoration.parameters(), lr=opt.lr_initial, betas=(0.9, 0.999),eps=1e-8, weight_decay=opt.weight_decay)
 elif opt.optimizer.lower() == 'adamw':
-        optimizer = optim.AdamW(model_restoration.parameters(), lr=opt.lr_initial, betas=(0.9, 0.999),eps=1e-8, weight_decay=opt.weight_decay)
+    optimizer = optim.AdamW(model_restoration.parameters(), lr=opt.lr_initial, betas=(0.9, 0.999),eps=1e-8, weight_decay=opt.weight_decay)
 else:
     raise Exception("Error optimizer...")
 
@@ -120,11 +120,11 @@ dino = DINOLoss().cuda()
 ######### DataLoader ###########
 print('===> Loading datasets')
 img_options_train = {'patch_size':opt.train_ps}
-train_dataset = get_training_data(opt.train_dir, img_options_train, color_space=opt.color_space)
+train_dataset = get_training_data(opt.train_dir, img_options_train, color_space=opt.color_space, mask_dir=opt.mask_dir)
 train_loader = DataLoader(dataset=train_dataset, batch_size=opt.batch_size, shuffle=True, 
         num_workers=opt.train_workers, pin_memory=True, drop_last=False)
 
-val_dataset = get_validation_data(opt.val_dir, color_space=opt.color_space)
+val_dataset = get_validation_data(opt.val_dir, color_space=opt.color_space, mask_dir=opt.mask_dir)
 val_loader = DataLoader(dataset=val_dataset, batch_size=1, shuffle=False,
         num_workers=opt.eval_workers, pin_memory=False, drop_last=False)
 
@@ -149,8 +149,17 @@ for epoch in range(start_epoch, opt.nepoch + 1):
     epoch_loss = {'crite': 0, 'dino': 0, 'self_rep': 0, 'sum': 0}
     train_id = 1
     epoch_ssim_loss = 0
-    for i, data in enumerate(train_loader, 0): 
+    pbar = tqdm(train_loader, ncols=100)
+    for i, data in enumerate(pbar, 0): 
+        epoch_loss_formatted = dict()
+        for key, value in epoch_loss.items():
+            if key in ['dino']:
+                epoch_loss_formatted[key] = f"{value:.1e}"
+            else:
+                epoch_loss_formatted[key] = f"{value:.1f}"
+        pbar.set_postfix(epoch_loss_formatted)
         # zero_grad
+        loss = 0.0
         index += 1
         optimizer.zero_grad()
         target = data[0].cuda()
@@ -164,43 +173,55 @@ for epoch in range(start_epoch, opt.nepoch + 1):
             target, input_, mask = utils.MixUp_AUG().aug(target, input_, mask)
 
         # self-representation learning 
-        if opt.self_rep_lambda:
-            with torch.cuda.amp.autocast():
-                target_mask = torch.zeros_like(mask).cuda()
-                restored = model_restoration(target, mask)
-                if opt.color_space == 'hsv':
-                    restored = torch.clamp(restored,0,1)
-                    loss_cr = criterion(restored[:, 2], target[:, 2])
-                else:
-                    restored = torch.clamp(restored,0,1)
-                    loss_cr = criterion(restored, target, diff)
+        # if opt.self_rep_lambda:
+        #     loss_self = 0.0
+        #     with torch.cuda.amp.autocast():
+        #         target_mask = torch.zeros_like(mask).cuda()
+        #         restored = model_restoration(target, target_mask)
+        #         restored = torch.clamp(restored,0,1)
+        #         if opt.color_space == 'hsv':
+        #             loss_self = loss_self + criterion(restored[:, 2], target[:, 2])
+        #         else:
+        #             loss_self = loss_self + criterion(restored, target, diff)
                 
-                if opt.dino_lambda:
-                    loss_dino = dino(restored, target)
-                    loss = loss_cr + opt.dino_lambda * loss_dino
-                else:
-                    loss = loss_cr
-            epoch_loss['self_rep'] += loss.item()
-            loss = loss * opt.self_rep_lambda
-            loss_scaler(
-                    loss, optimizer,parameters=model_restoration.parameters())
+        #         if opt.dino_lambda:
+        #             loss_dino = dino(restored, target)
+        #             loss_self = loss_self + opt.dino_lambda * loss_dino
+        #     epoch_loss['self_rep'] += loss_self.item()
+        #     loss_self = loss_self * opt.self_rep_lambda
+        #     epoch_loss['sum'] += loss_self.item()
+        #     loss_scaler(
+        #             loss_self, optimizer,parameters=model_restoration.parameters())
 
         with torch.cuda.amp.autocast():
-            restored = model_restoration(input_, mask)
-            if opt.color_space == 'hsv':
+            if opt.self_rep_lambda:
+                loss_self = 0.0
+                target_mask = torch.zeros_like(mask).cuda()
+                restored = model_restoration(target, target_mask)
                 restored = torch.clamp(restored,0,1)
+                if opt.color_space == 'hsv':
+                    loss_self = loss_self + criterion(restored[:, 2], target[:, 2])
+                else:
+                    loss_self = loss_self + criterion(restored, target, diff)
+                if opt.dino_lambda:
+                    loss_dino = dino(restored, target)
+                    loss_self = loss_self + opt.dino_lambda * loss_dino
+                epoch_loss['self_rep'] += loss_self.item()
+                loss = loss + loss_self * opt.self_rep_lambda
+
+            restored = model_restoration(input_, mask)
+            restored = torch.clamp(restored,0,1)
+            if opt.color_space == 'hsv':
                 loss_cr = criterion(restored[:, 2], target[:, 2])
             else:
-                restored = torch.clamp(restored,0,1)
                 loss_cr = criterion(restored, target, diff)
+            loss = loss + loss_cr
             epoch_loss['crite'] += loss_cr.item()
 
             if opt.dino_lambda:
                 loss_dino = dino(restored, target)
-                loss = loss_cr + opt.dino_lambda * loss_dino
+                loss = loss + opt.dino_lambda * loss_dino
                 epoch_loss['dino'] += loss_dino.item()
-            else:
-                loss = loss_cr
             epoch_loss['sum'] += loss.item()
         loss_scaler(
                 loss, optimizer,parameters=model_restoration.parameters())
@@ -255,14 +276,10 @@ for epoch in range(start_epoch, opt.nepoch + 1):
     if epoch_loss['crite']:
         line_log += f"(crite): {epoch_loss['crite']:.4f}\t"
     if epoch_loss['dino']:
-<<<<<<< HEAD
         line_log += f"(dino): {epoch_loss['dino']:.4e}\t"
-=======
-        line_log += f"(dino): {epoch_loss['dino']:.3e}\t"
     if epoch_loss['self_rep']:
         line_log += f"(self_rep): {epoch_loss['self_rep']:.3e}\t"
-    line_log += f"LearningRate {scheduler.get_lr()[0]:.6f}"
->>>>>>> self-representation
+    # line_log += f"LearningRate {scheduler.get_lr()[0]:.6f}"
 
     print("------------------------------------------------------------------")
     # print("Epoch: {}\tTime: {:.4f}\tLoss: {:.4f}\tLearningRate {:.6f}".format(epoch, time.time()-epoch_start_time,epoch_loss,scheduler.get_lr()[0]))

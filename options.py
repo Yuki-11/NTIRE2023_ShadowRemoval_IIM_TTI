@@ -25,6 +25,7 @@ class Options():
         parser.add_argument('--color_space', type=str, default ='rgb',  
                             choices=['rgb', 'bray', 'hsv', 'lab', 'luv', 'hls', 'yuv', 'xyz', 'ycrcb'], help='color space')
         parser.add_argument('--self_rep_lambda', type=float, default=0, help='size of self-representation loss. When it is 0, this loss is not used.')
+        parser.add_argument('--mask_dir',type=str, default='mask', help='mask directory')
         
         # args for saving 
         parser.add_argument('--save_dir', type=str, default ='./log',  help='save dir')

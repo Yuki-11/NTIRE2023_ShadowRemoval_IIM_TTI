@@ -82,7 +82,7 @@ class DataLoaderTrain(Dataset):
 
 ##################################################################################################
 class DataLoaderTrainOfficialWarped(Dataset):
-    def __init__(self, rgb_dir, img_options=None, target_transform=None, color_space='rgb'):
+    def __init__(self, rgb_dir, img_options=None, target_transform=None, color_space='rgb', mask_dir='mask'):
         super(DataLoaderTrainOfficialWarped, self).__init__()
 
         enable_list = [
@@ -104,7 +104,7 @@ class DataLoaderTrainOfficialWarped(Dataset):
         assert 'official_warped' in rgb_dir
         gt_dir = 'gt'
         input_dir = 'input'
-        mask_dir = 'mask'
+        # mask_dir = 'mask'
         diff_dir = 'diff'
         
         clean_files = sorted(os.listdir(os.path.join(rgb_dir, gt_dir)))
@@ -170,7 +170,7 @@ class DataLoaderTrainOfficialWarped(Dataset):
 
 ##################################################################################################
 class DataLoaderVal(Dataset):
-    def __init__(self, rgb_dir, target_transform=None, color_space='rgb'):
+    def __init__(self, rgb_dir, target_transform=None, color_space='rgb', mask_dir='mask'):
         super(DataLoaderVal, self).__init__()
 
         enable_list = [
@@ -196,7 +196,7 @@ class DataLoaderVal(Dataset):
         elif 'official' in rgb_dir:
             gt_dir = 'gt'
             input_dir = 'input'
-            mask_dir = 'mask'
+            # mask_dir = 'mask'
         else:
             assert False, rgb_dir
         
@@ -236,7 +236,7 @@ class DataLoaderVal(Dataset):
 
 ##################################################################################################
 class DataLoaderTest(Dataset):
-    def __init__(self, rgb_dir, target_transform=None, color_space='rgb'):
+    def __init__(self, rgb_dir, target_transform=None, color_space='rgb', mask_dir='mask'):
         super(DataLoaderTest, self).__init__()
 
         enable_list = [
@@ -257,10 +257,10 @@ class DataLoaderTest(Dataset):
         
         if 'ISTD' in rgb_dir:
             input_dir = 'train_A'
-            mask_dir = 'train_B'
+            # mask_dir = 'train_B'
         elif 'official' in rgb_dir:
             input_dir = 'input'
-            mask_dir = 'mask'
+            # mask_dir = 'mask'
         else:
             assert False, rgb_dir
         
