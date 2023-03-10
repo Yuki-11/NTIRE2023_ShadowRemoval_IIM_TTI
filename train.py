@@ -121,7 +121,7 @@ dino = DINOLoss().cuda()
 ######### DataLoader ###########
 print('===> Loading datasets')
 img_options_train = {'patch_size':opt.train_ps}
-train_dataset = get_training_data(opt.train_dir, img_options_train, color_space=opt.color_space, mask_dir=opt.mask_dir)
+train_dataset = get_training_data(opt.train_dir, img_options_train, color_space=opt.color_space, mask_dir=opt.mask_dir, opt=opt)
 train_loader = DataLoader(dataset=train_dataset, batch_size=opt.batch_size, shuffle=True, 
         num_workers=opt.train_workers, pin_memory=True, drop_last=False)
 
@@ -148,6 +148,7 @@ index = 0
 for epoch in range(start_epoch, opt.nepoch + 1):
     epoch_start_time = time.time()
     epoch_loss = {'crite': 0, 'dino': 0, 'self_rep': 0, 'ft':0, 'sum': 0}
+    psnr_list = []
     train_id = 1
     epoch_ssim_loss = 0
     pbar = tqdm(train_loader, ncols=140)
@@ -231,6 +232,21 @@ for epoch in range(start_epoch, opt.nepoch + 1):
                 epoch_loss['ft'] += loss_feature.item()
             
             epoch_loss['sum'] += loss.item()
+
+            psnr_list.append(utils.batch_PSNR(restored, target, False, color_space=opt.color_space).item())
+            filenames = data[4]
+            if epoch in map(lambda x: ((x - 1) // len(train_loader)) + 1, range(eval_now, len(train_loader) * 501, eval_now)) and i>0:
+                for j, filename in enumerate(filenames):
+                    if filename in ['0004.png', '0891.png', '0360.png', '0392.png']:
+                        result_dir = os.path.join(log_dir, 'results', str(epoch))
+                        os.makedirs(result_dir, exist_ok=True)
+                        psnr = utils.myPSNR(restored[j], target[j]).item()
+                        restored_save = restored[j].detach().cpu().numpy().squeeze().transpose((1, 2, 0))
+                        noisy_save = input_[j].detach().cpu().numpy().squeeze().transpose((1, 2, 0))
+                        rgb_restored = convert_color_space(restored_save, opt.color_space, 'rgb')
+                        rgb_noisy = convert_color_space(noisy_save, opt.color_space, 'rgb')
+                        utils.save_img(rgb_restored*255.0, os.path.join(result_dir, filename+"-psnr{:.2f}.png".format(psnr)))
+                        utils.save_img(rgb_noisy*255.0, os.path.join(result_dir, filename+"-input.png"))
         loss_scaler(
                 loss, optimizer,parameters=model_restoration.parameters())
         #### Evaluation ####
@@ -249,7 +265,7 @@ for epoch in range(start_epoch, opt.nepoch + 1):
                     mask = data_val[2].cuda()
                     filenames = data_val[3]
                     with torch.cuda.amp.autocast():
-                        restored = model_restoration(input_, mask)
+                        restored, _ = model_restoration(input_, mask)
                     if opt.color_space == 'hsv':
                         restored[:, 0] = input_[:, 0]
                         restored[:, 1] = input_[:, 1]
@@ -262,7 +278,7 @@ for epoch in range(start_epoch, opt.nepoch + 1):
                         rgb_restored = convert_color_space(restored, opt.color_space, 'rgb')
                         utils.save_img(rgb_restored*255.0, os.path.join(result_dir, filenames[0]))
     
-                psnr_val_rgb = sum(psnr_val_rgb)/len(val_loader)
+                psnr_val_rgb = sum(psnr_val_rgb)/len(val_dataset)
                 if psnr_val_rgb > best_psnr:
                     best_psnr = psnr_val_rgb
                     best_epoch = epoch
@@ -271,7 +287,7 @@ for epoch in range(start_epoch, opt.nepoch + 1):
                                 'state_dict': model_restoration.state_dict(),
                                 'optimizer' : optimizer.state_dict()
                                 }, os.path.join(model_dir,"model_best.pth"))
-                print("[Ep %d it %d\t PSNR : %.4f] " % (epoch, i, psnr_val_rgb))
+                print("\n[Ep %d it %d\t PSNR : %.4f] " % (epoch, i, psnr_val_rgb))
                 with open(logname,'a') as f:
                     f.write("[Ep %d it %d\t PSNR SIDD: %.4f\t] ----  [best_Ep_SIDD %d best_it_SIDD %d Best_PSNR_SIDD %.4f] " \
                         % (epoch, i, psnr_val_rgb,best_epoch,best_iter,best_psnr)+'\n')
@@ -279,8 +295,9 @@ for epoch in range(start_epoch, opt.nepoch + 1):
                 torch.cuda.empty_cache()
     scheduler.step()
     
+    psnr = sum(psnr_list) / len(train_dataset)
     line_log = ""
-    line_log += f"Epoch: {epoch}\tTime: {time.time() - epoch_start_time:.3f}\tLearningRate {scheduler.get_lr()[0]:.6f}\nLoss: {epoch_loss['sum']:.4f}\t"
+    line_log += f"Epoch: {epoch}\tTime: {time.time() - epoch_start_time:.3f}\tPSNR: {psnr:.3f}\tLearningRate {scheduler.get_lr()[0]:.6f}\nLoss: {epoch_loss['sum']:.4f}\t"
     if epoch_loss['crite']:
         line_log += f"(crite): {epoch_loss['crite']:.4f}\t"
     if epoch_loss['dino']:

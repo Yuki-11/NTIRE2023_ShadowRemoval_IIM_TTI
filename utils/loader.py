@@ -1,10 +1,10 @@
 import os
 
 from dataset import DataLoaderTrain, DataLoaderTrainOfficialWarped, DataLoaderVal, DataLoaderTest
-def get_training_data(rgb_dir, img_options, color_space='rgb', mask_dir='mask'):
+def get_training_data(rgb_dir, img_options, color_space='rgb', mask_dir='mask', opt=None):
     assert os.path.exists(rgb_dir), rgb_dir
     if 'official_warped' in rgb_dir:
-        return DataLoaderTrainOfficialWarped(rgb_dir, img_options, None, color_space, mask_dir)
+        return DataLoaderTrainOfficialWarped(rgb_dir, img_options, None, color_space, mask_dir, opt)
     else:
         return DataLoaderTrain(rgb_dir, img_options, None)
 

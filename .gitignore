@@ -1,12 +1,12 @@
 env/
 __pycache__/
-
+compare/
 datasets/
 results/
 tmp/
 log/
 submit/
-
+viz_cutshadow/
 image_registration/
 
 *.pth

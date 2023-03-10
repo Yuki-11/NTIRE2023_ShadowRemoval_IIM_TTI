@@ -29,6 +29,7 @@ class Options():
         parser.add_argument('--self_rep_once', action='store_true', default=False, help='backward default mse loss and self_rep loss same time')
         parser.add_argument('--self_feature_lambda', type=float, default=0, help='weight of feature loss')
         parser.add_argument('--mask_dir',type=str, default='mask', help='mask directory')
+        parser.add_argument('--cut_shadow', action='store_true', default=False, help='apply cut_shadow')
         
         # args for saving 
         parser.add_argument('--save_dir', type=str, default ='./log',  help='save dir')

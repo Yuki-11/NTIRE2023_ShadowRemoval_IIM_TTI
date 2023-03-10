@@ -1,23 +1,18 @@
-#%%
-import numpy as np
-import cv2
-from utils import convert_color_space
 
-in_path = 'datasets/official_warped/train/input/0001.png'
-out_path = 'test.png'
+len_train = 15
+eval_now = 100
 
-#%%
-img = cv2.imread(in_path)
-cv2.imwrite('test2.png', img)
-print(img[0, :3])
-img = img.astype(np.float32) / 255
-img = convert_color_space(img, 'rgb', 'hsv')
-print(img[0, :3])
-# img[:, :, 0] %= 1
-print(img[0, :3])
-img = convert_color_space(img, 'hsv', 'rgb')
-img *= 255
-print(img[0, :3])
-cv2.imwrite(out_path, img)
+print(list(map(lambda x: ((x - 1) // len_train) + 1, range(100, 15 * 501, 100))))
 
-# %%
+index = 0
+for epoch in range(1, 50 + 1):
+    for i in range(len_train):
+        print(index, epoch, i)
+        index += 1
+        if epoch in map(lambda x: ((x - 1) // len_train) + 1, range(100, 15 * 501, 100)):
+            print(True)
+        else:
+            print(False)
+        if (index + 1) % eval_now == 0 and i > 0:
+            print('eval!!!!!!')
+    print()

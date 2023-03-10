@@ -91,13 +91,9 @@ def myPSNR_np(tar_img, prd_img):
 def batch_PSNR(img1, img2, average=True, color_space='rgb'):
     PSNR = []
     for im1, im2 in zip(img1, img2):
-        im1_cvt = convert_color_space(im1.cpu().numpy().transpose((1, 2, 0)), color_space, 'rgb')
-        im2_cvt = convert_color_space(im2.cpu().numpy().transpose((1, 2, 0)), color_space, 'rgb')
-        # cv2.imwrite(f'tmp/pred.png', im1_cvt * 255)
-        # cv2.imwrite(f'tmp/gt.png', im2_cvt * 255)
-        imsave(im1_cvt * 255, f'tmp/pred.png')
-        imsave(im2_cvt * 255, f'tmp/gt.png')
-        psnr = myPSNR_np(im1_cvt, im2_cvt)
+        # im1_cvt = convert_color_space(im1.cpu().numpy().transpose((1, 2, 0)), color_space, 'rgb')
+        # im2_cvt = convert_color_space(im2.cpu().numpy().transpose((1, 2, 0)), color_space, 'rgb')
+        psnr = myPSNR(im1, im2)
         PSNR.append(psnr)
     return sum(PSNR)/len(PSNR) if average else sum(PSNR)
 

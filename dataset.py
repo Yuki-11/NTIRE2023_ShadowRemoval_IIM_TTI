@@ -5,6 +5,7 @@ import torch
 from utils import is_png_file, load_img, load_val_img, load_mask, load_diff, load_val_mask, Augment_RGB_torch
 import torch.nn.functional as F
 import random
+from utils.dataset_utils import CutShadow
 
 augment = Augment_RGB_torch()
 transforms_aug = [method for method in dir(augment) if callable(getattr(augment, method)) if not method.startswith('_')] 
@@ -82,20 +83,10 @@ class DataLoaderTrain(Dataset):
 
 ##################################################################################################
 class DataLoaderTrainOfficialWarped(Dataset):
-    def __init__(self, rgb_dir, img_options=None, target_transform=None, color_space='rgb', mask_dir='mask'):
+    def __init__(self, rgb_dir, img_options=None, target_transform=None, color_space='rgb', mask_dir='mask', opt=None):
         super(DataLoaderTrainOfficialWarped, self).__init__()
 
-        enable_list = [
-            'rgb',
-            'bray',
-            'hsv',
-            'lab',
-            'luv',
-            'hls',
-            'yuv',
-            'xyz',
-            'ycrcb'
-        ]
+        enable_list = ['rgb', 'bray', 'hsv', 'lab', 'luv', 'hls', 'yuv', 'xyz', 'ycrcb']
         assert color_space in enable_list, color_space
         self.color_space = color_space
 
@@ -117,9 +108,19 @@ class DataLoaderTrainOfficialWarped(Dataset):
         self.mask_filenames = [os.path.join(rgb_dir, mask_dir, x) for x in mask_files if is_png_file(x)]
         self.diff_filenames = [os.path.join(rgb_dir, diff_dir, x) for x in diff_files if is_png_file(x)]
 
+        # それぞれのリストが一致するかどうか確認
+        for clean, noisy, mask, diff in zip(self.clean_filenames, self.noisy_filenames, self.mask_filenames, self.diff_filenames):
+            assert clean.split('/')[-1] == noisy.split('/')[-1] == mask.split('/')[-1] == diff.split('/')[-1], \
+                    (clean.split('/')[-1], noisy.split('/')[-1], mask.split('/')[-1], diff.split('/')[-1])
+        assert len(self.clean_filenames) == len(self.noisy_filenames) == len(self.mask_filenames) == len(self.diff_filenames), \
+                (len(self.clean_filenames), len(self.noisy_filenames), len(self.mask_filenames), len(self.diff_filenames))
+
         self.img_options = img_options
 
         self.tar_size = len(self.clean_filenames)  # get the size of target
+
+        self.opt=opt
+        self.cut_shadow = CutShadow(p = 0.5)
 
     def __len__(self):
         return self.tar_size
@@ -158,6 +159,9 @@ class DataLoaderTrainOfficialWarped(Dataset):
         mask = mask[r:r + ps, c:c + ps]
         diff = diff[:, r:r + ps, c:c + ps]
 
+        if self.opt.cut_shadow:
+            noisy, mask = self.cut_shadow(clean, noisy, mask) # cut shadow
+
         apply_trans = transforms_aug[random.getrandbits(3)]
 
         clean = getattr(augment, apply_trans)(clean)
@@ -165,7 +169,7 @@ class DataLoaderTrainOfficialWarped(Dataset):
         mask = getattr(augment, apply_trans)(mask)
         mask = torch.unsqueeze(mask, dim=0)     
         diff = getattr(augment, apply_trans)(diff)
-        diff = torch.unsqueeze(diff, dim=0)
+        # diff = torch.unsqueeze(diff, dim=0)
         return clean, noisy, mask, diff, clean_filename, noisy_filename
 
 ##################################################################################################
@@ -173,17 +177,7 @@ class DataLoaderVal(Dataset):
     def __init__(self, rgb_dir, target_transform=None, color_space='rgb', mask_dir='mask'):
         super(DataLoaderVal, self).__init__()
 
-        enable_list = [
-            'rgb',
-            'bray',
-            'hsv',
-            'lab',
-            'luv',
-            'hls',
-            'yuv',
-            'xyz',
-            'ycrcb'
-        ]
+        enable_list = ['rgb', 'bray', 'hsv', 'lab', 'luv', 'hls', 'yuv', 'xyz', 'ycrcb']
         assert color_space in enable_list, color_space
         self.color_space = color_space
 
@@ -239,17 +233,7 @@ class DataLoaderTest(Dataset):
     def __init__(self, rgb_dir, target_transform=None, color_space='rgb', mask_dir='mask'):
         super(DataLoaderTest, self).__init__()
 
-        enable_list = [
-            'rgb',
-            'bray',
-            'hsv',
-            'lab',
-            'luv',
-            'hls',
-            'yuv',
-            'xyz',
-            'ycrcb'
-        ]
+        enable_list = ['rgb', 'bray', 'hsv', 'lab', 'luv', 'hls', 'yuv', 'xyz', 'ycrcb']
         assert color_space in enable_list, color_space
         self.color_space = color_space
 

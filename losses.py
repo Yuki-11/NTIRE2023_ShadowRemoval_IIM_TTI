@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import vision_transformer as vits
+# from utils.canny_module import CannyModule
 
 
 def tv_loss(x, beta = 0.5, reg_coeff = 5):
@@ -170,6 +171,12 @@ class SeamLoss(nn.Module):
             self.loss_func = CharbonnierLoss()
         elif loss_type == "ssim":
             self.loss_func =  SSIMLoss()
+        self.canny = CannyModule(threshold=3.0, use_cuda=True)
+        self.canny.cuda()
+        self.canny.eval()
+
+    def _grad(self, img1, img2):
+        blurred_img, grad_mag, grad_orientation, thin_edges, thresholded, early_threshold = self.canny(data)
     
     def forward(self, img1, img2):
         

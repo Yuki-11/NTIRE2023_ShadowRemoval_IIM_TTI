@@ -40,6 +40,8 @@ parser.add_argument('--token_projection', type=str, default='linear', help='line
 parser.add_argument('--token_mlp', type=str,default='leff', help='ffn/leff token mlp')
 parser.add_argument('--color_space', type=str, default ='rgb',  
                     choices=['rgb', 'bray', 'hsv', 'lab', 'luv', 'hls', 'yuv', 'xyz', 'ycrcb'], help='color space')
+parser.add_argument('--self_feature_lambda', type=float, default=0, help='weight of feature loss')
+parser.add_argument('--mask_dir',type=str, default='mask', help='mask directory')
 # args for vit
 parser.add_argument('--vit_dim', type=int, default=256, help='vit hidden_dim')
 parser.add_argument('--vit_depth', type=int, default=12, help='vit depth')
@@ -60,7 +62,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = args.gpus
 
 utils.mkdir(args.result_dir)
 
-test_dataset = get_test_data(args.input_dir, color_space=args.color_space)
+test_dataset = get_test_data(args.input_dir, color_space=args.color_space, mask_dir=args.mask_dir)
 test_loader = DataLoader(dataset=test_dataset, batch_size=1, shuffle=False, num_workers=8, drop_last=False)
 
 model_restoration = utils.get_arch(args)
@@ -100,7 +102,7 @@ with torch.no_grad():
         mask = F.pad(mask, (0, padw, 0, padh), 'reflect')
 
         if args.tile is None:
-            rgb_restored = model_restoration(rgb_noisy, mask)
+            rgb_restored, _ = model_restoration(rgb_noisy, mask)
         else:
             # test the image tile by tile
             b, c, h, w = rgb_noisy.shape
@@ -118,7 +120,7 @@ with torch.no_grad():
                 for w_idx in w_idx_list:
                     in_patch = rgb_noisy[..., h_idx:h_idx + tile, w_idx:w_idx + tile]
                     mask_patch = mask[..., h_idx:h_idx + tile, w_idx:w_idx + tile]
-                    out_patch = model_restoration(in_patch, mask_patch)
+                    out_patch, _ = model_restoration(in_patch, mask_patch)
                     out_patch_mask = torch.ones_like(out_patch)
 
                     E[..., h_idx:(h_idx + tile), w_idx:(w_idx + tile)].add_(out_patch)

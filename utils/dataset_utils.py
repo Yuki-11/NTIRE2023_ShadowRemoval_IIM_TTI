@@ -1,6 +1,10 @@
 import torch
 import os
 
+import numpy as np
+import torchvision.transforms as T
+from typing import Tuple, Optional
+
 ### rotate and flip
 class Augment_RGB_torch:
     def __init__(self):
@@ -50,3 +54,70 @@ class MixUp_AUG:
         # gray_mask = torch.where(gray_mask>0.01, torch.ones_like(gray_mask), torch.zeros_like(gray_mask))
         # gray_contour = lam * gray_contour + (1-lam) * gray_contour2
         return rgb_gt, rgb_noisy, gray_mask
+
+
+class CutShadow(object):
+    """
+    CutShadow
+    一部分を影有り画像に変える
+
+    Attributes
+    ----------
+    p : float
+        CutMixを実行する確率．
+    alpha : float
+        画像をくり抜くサイズのバイアス．
+    """
+    def __init__(self, p: float = 1.0, alpha: float = 0.7):
+        """
+        Parameters
+        ----------
+        p : float
+            CutMixを実行する確率．
+        alpha : float
+            画像をくり抜くサイズのバイアス．
+        """
+        self.p = p
+        self.alpha = alpha
+
+    def __call__(self, clean: torch.Tensor, noisy: torch.Tensor, mask: torch.Tensor)\
+            -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Parameters
+        ----------
+        clean : torch.Tensor
+            shadow-free image
+        noisy : torch.Tensor
+            shadow image
+        mask : torch.Tensor
+            mask of shadow image
+    
+        Returns
+        -------
+        Tuple[torch.Tensor, torch.Tensor]
+            mix_img, mask
+        """
+        if np.random.rand(1) >= self.p:
+            return noisy, mask
+
+        cut_ratio = np.random.randn() * 0.01 + self.alpha
+        h, w = clean.size()[1:]
+        ch, cw = int(h*cut_ratio), int(w*cut_ratio)
+
+        fcy = np.random.randint(0, h-ch+1)
+        fcx = np.random.randint(0, w-cw+1)
+        tcy, tcx = fcy, fcx
+
+        # if np.random.rand(1) > 0.5:
+        clean[:, tcy:tcy+ch, tcx:tcx+cw] = noisy[:, fcy:fcy+ch, fcx:fcx+cw]
+        mix_img = clean
+        new_mask = torch.zeros_like(mask)
+        new_mask[tcy:tcy+ch, tcx:tcx+cw] = mask[tcy:tcy+ch, tcx:tcx+cw]
+        # else:
+        #     noisy[:, tcy:tcy+ch, tcx:tcx+cw] = clean[:, fcy:fcy+ch, fcx:fcx+cw]
+        #     mix_img = noisy
+        #     mask[tcy:tcy+ch, tcx:tcx+cw] = 0.
+        #     new_mask = mask
+        
+        return mix_img, new_mask
+        
