@@ -14,8 +14,9 @@ import options
 from utils.loader import get_training_data, get_validation_data
 
 opt = options.Options().init(argparse.ArgumentParser(description='image denoising')).parse_args()
+opt.cut_shadow = True
 
-row, col = 1, 4
+row, col = 1, 6
 num = row * col
 
 train_dir = 'datasets/official_warped/train'
@@ -45,9 +46,10 @@ for i, data in enumerate(train_loader):
     # img = torchvision.utils.make_grid(mask, nrow=col)
     # img = transforms.functional.to_pil_image(img)
     # img.save(output_dir / f'cut_shadow_mask{filenames[0]}')
-    img = torchvision.utils.make_grid(torch.concat((noisy, mask.expand(num, 3, -1, -1)), 0), nrow=col)
+    img = torchvision.utils.make_grid(torch.concat((noisy, clean, mask.expand(num, 3, -1, -1)), 0), nrow=col)
     img = transforms.functional.to_pil_image(img)
     img.save(output_dir / f'cut_shadow_{filenames[0]}')
+    print(f"save cut_shadow_{filenames[0]}")
 
     # clean = clean.squeeze(dim = 0)
     # noisy = noisy.squeeze(dim = 0)

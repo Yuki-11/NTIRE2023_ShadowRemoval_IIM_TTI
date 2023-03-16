@@ -74,7 +74,10 @@ def load_val_mask(filepath):
 
 def save_img(img, filepath, color_space='rgb'):
     cvt_img = convert_color_space(img, color_space, 'rgb')
-    cv2.imwrite(filepath, cv2.cvtColor(cvt_img, cv2.COLOR_RGB2BGR))
+    if img.shape[2] > 1:
+        cv2.imwrite(filepath, cv2.cvtColor(cvt_img, cv2.COLOR_RGB2BGR))
+    else:
+        cv2.imwrite(filepath, img)
 
 def myPSNR(tar_img, prd_img):
     imdff = torch.clamp(prd_img,0,1) - torch.clamp(tar_img,0,1)
@@ -188,3 +191,58 @@ def convert_color_space(img: np, from_space='rgb', to_space='hsv'):
         return cv2.cvtColor(img, rgb2x_dict[to_space])
     else:
         return cv2.cvtColor(img, x2rgb_dict[from_space])
+
+# https://github.com/rockeyben/DCCF/blob/master/iharm/model/ps_filters.py#L338-L390
+def hsv_to_rgb(hsv):
+    h,s,v = hsv[:,0,:,:],hsv[:,1,:,:],hsv[:,2,:,:]
+    #对出界值的处理
+    s = torch.clamp(s,0,1)
+    v = torch.clamp(v,0,1)
+    
+    hi = torch.floor(h * 6)
+    f = h * 6 - hi
+    p = v * (1 - s)
+    q = v * (1 - (f * s))
+    t = v * (1 - ((1 - f) * s))
+    
+    hi0 = hi==0
+    hi1 = hi==1
+    hi2 = hi==2
+    hi3 = hi==3
+    hi4 = hi==4
+    hi5 = hi==5
+
+    r = v * hi0 + q * hi1 + p * hi2 + p * hi3 + t * hi4 + v * hi5
+    g = t * hi0 + v * hi1 + v * hi2 + q * hi3 + p * hi4 + p * hi5
+    b = p * hi0 + p * hi1 + t * hi2 + v * hi3 + v * hi4 + q * hi5
+    
+    r = r.unsqueeze(1)
+    g = g.unsqueeze(1)
+    b = b.unsqueeze(1)
+    rgb = torch.cat([r, g, b], dim=1)
+    
+    return rgb
+
+# https://github.com/rockeyben/DCCF/blob/master/iharm/model/ps_filters.py#L338-L390
+def rgb_to_hsv(img):
+    eps = 1e-7
+    hue = torch.Tensor(img.shape[0], img.shape[2], img.shape[3]).to(img.device)
+
+    hue[ img[:,2]==img.max(1)[0] ] = 4.0 + ( (img[:,0]-img[:,1]) / ( img.max(1)[0] - img.min(1)[0] + eps) ) [ img[:,2]==img.max(1)[0] ]
+    hue[ img[:,1]==img.max(1)[0] ] = 2.0 + ( (img[:,2]-img[:,0]) / ( img.max(1)[0] - img.min(1)[0] + eps) ) [ img[:,1]==img.max(1)[0] ]
+    hue[ img[:,0]==img.max(1)[0] ] = (0.0 + ( (img[:,1]-img[:,2]) / ( img.max(1)[0] - img.min(1)[0] + eps) ) [ img[:,0]==img.max(1)[0] ]) % 6
+
+    hue[img.min(1)[0]==img.max(1)[0]] = 0.0
+    hue = hue/6
+
+    saturation = ( img.max(1)[0] - img.min(1)[0] ) / ( img.max(1)[0] + eps )
+    saturation[ img.max(1)[0]==0 ] = 0
+
+    value = img.max(1)[0]
+    
+    hue = hue.unsqueeze(1)
+    saturation = saturation.unsqueeze(1)
+    value = value.unsqueeze(1)
+    hsv = torch.cat([hue, saturation, value],dim=1)
+
+    return hsv

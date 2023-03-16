@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import vision_transformer as vits
 # from utils.canny_module import CannyModule
+import kornia
 
 
 def tv_loss(x, beta = 0.5, reg_coeff = 5):
@@ -60,64 +61,64 @@ class CharbonnierLoss(nn.Module):
         return loss
 
 
+# korniaで代替
+# class SSIMLoss(nn.Module):
+#     def __init__(self, kernel_size: int = 11, sigma: float = 1.5):
+#         """Computes the structural similarity (SSIM) index map between two images.
 
-class SSIMLoss(nn.Module):
-    def __init__(self, kernel_size: int = 11, sigma: float = 1.5):
-        """Computes the structural similarity (SSIM) index map between two images.
+#         Args:
+#             kernel_size (int): Height and width of the gaussian kernel.
+#             sigma (float): Gaussian standard deviation in the x and y direction.
+#         """
 
-        Args:
-            kernel_size (int): Height and width of the gaussian kernel.
-            sigma (float): Gaussian standard deviation in the x and y direction.
-        """
+#         super().__init__()
+#         self.kernel_size = kernel_size
+#         self.sigma = sigma
+#         self.gaussian_kernel = self._create_gaussian_kernel(self.kernel_size, self.sigma)
 
-        super().__init__()
-        self.kernel_size = kernel_size
-        self.sigma = sigma
-        self.gaussian_kernel = self._create_gaussian_kernel(self.kernel_size, self.sigma)
+#     def forward(self, x, y, as_loss: bool = True):
 
-    def forward(self, x, y, as_loss: bool = True):
+#         if not self.gaussian_kernel.is_cuda:
+#             self.gaussian_kernel = self.gaussian_kernel.to(x.device)
 
-        if not self.gaussian_kernel.is_cuda:
-            self.gaussian_kernel = self.gaussian_kernel.to(x.device)
+#         ssim_map = self._ssim(x, y)
 
-        ssim_map = self._ssim(x, y)
+#         if as_loss:
+#             return 1 - ssim_map.mean()
+#         else:
+#             return ssim_map
 
-        if as_loss:
-            return 1 - ssim_map.mean()
-        else:
-            return ssim_map
+#     def _ssim(self, x, y):
 
-    def _ssim(self, x, y):
+#         # Compute means
+#         ux = F.conv2d(x, self.gaussian_kernel, padding=self.kernel_size // 2, groups=3)
+#         uy = F.conv2d(y, self.gaussian_kernel, padding=self.kernel_size // 2, groups=3)
 
-        # Compute means
-        ux = F.conv2d(x, self.gaussian_kernel, padding=self.kernel_size // 2, groups=3)
-        uy = F.conv2d(y, self.gaussian_kernel, padding=self.kernel_size // 2, groups=3)
+#         # Compute variances
+#         uxx = F.conv2d(x * x, self.gaussian_kernel, padding=self.kernel_size // 2, groups=3)
+#         uyy = F.conv2d(y * y, self.gaussian_kernel, padding=self.kernel_size // 2, groups=3)
+#         uxy = F.conv2d(x * y, self.gaussian_kernel, padding=self.kernel_size // 2, groups=3)
+#         vx = uxx - ux * ux
+#         vy = uyy - uy * uy
+#         vxy = uxy - ux * uy
 
-        # Compute variances
-        uxx = F.conv2d(x * x, self.gaussian_kernel, padding=self.kernel_size // 2, groups=3)
-        uyy = F.conv2d(y * y, self.gaussian_kernel, padding=self.kernel_size // 2, groups=3)
-        uxy = F.conv2d(x * y, self.gaussian_kernel, padding=self.kernel_size // 2, groups=3)
-        vx = uxx - ux * ux
-        vy = uyy - uy * uy
-        vxy = uxy - ux * uy
+#         c1 = 0.01 ** 2
+#         c2 = 0.03 ** 2
+#         numerator = (2 * ux * uy + c1) * (2 * vxy + c2)
+#         denominator = (ux ** 2 + uy ** 2 + c1) * (vx + vy + c2)
+#         return numerator / (denominator + 1e-12)
 
-        c1 = 0.01 ** 2
-        c2 = 0.03 ** 2
-        numerator = (2 * ux * uy + c1) * (2 * vxy + c2)
-        denominator = (ux ** 2 + uy ** 2 + c1) * (vx + vy + c2)
-        return numerator / (denominator + 1e-12)
+#     def _create_gaussian_kernel(self, kernel_size: int, sigma: float):
 
-    def _create_gaussian_kernel(self, kernel_size: int, sigma: float):
+#         start = (1 - kernel_size) / 2
+#         end = (1 + kernel_size) / 2
+#         kernel_1d = torch.arange(start, end, step=1, dtype=torch.float)
+#         kernel_1d = torch.exp(-torch.pow(kernel_1d / sigma, 2) / 2)
+#         kernel_1d = (kernel_1d / kernel_1d.sum()).unsqueeze(dim=0)
 
-        start = (1 - kernel_size) / 2
-        end = (1 + kernel_size) / 2
-        kernel_1d = torch.arange(start, end, step=1, dtype=torch.float)
-        kernel_1d = torch.exp(-torch.pow(kernel_1d / sigma, 2) / 2)
-        kernel_1d = (kernel_1d / kernel_1d.sum()).unsqueeze(dim=0)
-
-        kernel_2d = torch.matmul(kernel_1d.t(), kernel_1d)
-        kernel_2d = kernel_2d.expand(3, 1, kernel_size, kernel_size).contiguous()
-        return kernel_2d
+#         kernel_2d = torch.matmul(kernel_1d.t(), kernel_1d)
+#         kernel_2d = kernel_2d.expand(3, 1, kernel_size, kernel_size).contiguous()
+#         return kernel_2d
 
 
 class DINOLoss(nn.Module):
@@ -165,21 +166,86 @@ class DINOLoss(nn.Module):
     
     
 class SeamLoss(nn.Module):
-    def __init__(self, loss_type="charbonnier"):
+    def __init__(self, loss_type="ssim", edge_detector="canny", color_space="hsv"):
         super().__init__()
+        if color_space == "hsv":
+            self.c_space_convert = self.rgb_to_hsv_and_extract_v
+        elif color_space == "rgb":
+            self.c_space_convert = lambda x: x
+        else:
+            raise Exception(f"{color_space} is not subject to color space conversions.")
+
+        if edge_detector == "canny":
+            self.edge_detector = self.canny_detection
+        elif edge_detector == "sobel":
+            self.edge_detector = kornia.filters.Sobel()
+        elif edge_detector == "first_d":
+            self.edge_detector = self.first_derivation 
+        else:
+            raise Exception(f"{edge_detector} is not subject to edge detectors.")
+
         if loss_type == "charbonnier":
             self.loss_func = CharbonnierLoss()
         elif loss_type == "ssim":
-            self.loss_func =  SSIMLoss()
-        self.canny = CannyModule(threshold=3.0, use_cuda=True)
-        self.canny.cuda()
-        self.canny.eval()
+            self.loss_func = self.ssim_loss
+        # elif loss_type == "charbonnier_and_gaussian":
+        #     self.edge_deloss_functector = hogehoge   
+        else:
+            raise Exception(f"{loss_type} is not subject to loss functions.")
 
-    def _grad(self, img1, img2):
-        blurred_img, grad_mag, grad_orientation, thin_edges, thresholded, early_threshold = self.canny(data)
-    
-    def forward(self, img1, img2):
+    def rgb_to_hsv_and_extract_v(self, img):
+        b, c, h, w = img.shape
+        return kornia.color.rgb_to_hsv(img)[:, 2].reshape(b, 1, h, w)
+
+    def canny_detection(self, img):
+        # NOTE : https://kornia-tutorials.readthedocs.io/en/latest/canny.html
+        canny = kornia.filters.Canny()
+        magnitude, edge =canny(img)
+        return edge
+
+    def first_derivation(self, img, normalize=True, eps: float = 1e-6):
+        # calculate the loss for each scale
+        # create filters [-1, 1] and [[1],[-1]] for diffing to the left and down respectively.
+
+        kernel_x = torch.FloatTensor([[0, 0, 0], 
+                                      [-1, 1, 0], 
+                                      [0, 0, 0]]).expand(1, 1, 3, 3)
+        kernel_y = torch.FloatTensor([[0, -1, 0], 
+                                      [0, 1, 0], 
+                                      [0, 0, 0]]).expand(1, 1, 3, 3)
         
+        if normalize:
+            kernel_x = kornia.filters.kernels.normalize_kernel2d(kernel_x)
+            kernel_y = kornia.filters.kernels.normalize_kernel2d(kernel_y)
+
+        gx = self.kernel_conv(img, kernel_x)
+        gy = self.kernel_conv(img, kernel_x)
+
+        magnitude = torch.sqrt(gx * gx + gy * gy + eps)
+
+        return magnitude
+
+    def kernel_conv(self, img, kernel):
+        # prepare kernel
+        tmp_kernel = kernel[:, None, ...]
+
+        # Pad with "replicate for spatial dims, but with zeros for channel
+        spatial_pad = kernel.size(2) // 2
+        pad_img = nn.ReflectionPad2d(spatial_pad)(img)
+        out = F.conv2d(pad_img, tmp_kernel, groups=1, padding=0, stride=1)
+        return out
+
+    def ssim_loss(self, img1, img2, window_size=7):
+        return kornia.losses.ssim_loss(img1, img2, window_size)
+
+    def forward(self, img1, img2):
+        # Color space conversions
+        _img1, _img2 = self.c_space_convert(img1), self.c_space_convert(img2)
+        # print(_img1.shape)
+        # Edge detection
+        _img1, _img2 = self.edge_detector(_img1), self.edge_detector(_img2)
+        # loss function
+        loss = self.loss_func(_img1, _img2)
         return loss
 
 

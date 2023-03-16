@@ -16,3 +16,5 @@ linformer
 timm
 ptflops
 dataclasses
+kornia
+wandb

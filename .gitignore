@@ -8,5 +8,5 @@ log/
 submit/
 viz_cutshadow/
 image_registration/
-
+wandb/
 *.pth

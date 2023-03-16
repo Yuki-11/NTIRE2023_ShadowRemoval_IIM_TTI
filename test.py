@@ -13,7 +13,7 @@ import torch.nn.functional as F
 
 import scipy.io as sio
 from utils.loader import get_validation_data
-from utils.image_utils import convert_color_space
+from utils.image_utils import convert_color_space, rgb_to_hsv
 import utils
 import cv2
 from model import UNet
@@ -42,7 +42,8 @@ parser.add_argument('--token_mlp', type=str,default='leff', help='ffn/leff token
 parser.add_argument('--color_space', type=str, default ='rgb',  
                     choices=['rgb', 'bray', 'hsv', 'lab', 'luv', 'hls', 'yuv', 'xyz', 'ycrcb'], help='color space')
 parser.add_argument('--self_feature_lambda', type=float, default=0, help='weight of feature loss')
-parser.add_argument('--mask_dir',type=str, default='mask', help='mask directory')
+parser.add_argument('--mask_dir',type=str, default='mask_v_mtmt', help='mask directory')
+parser.add_argument('--w_hsv', action='store_true', default=False, help='Add hsv to the input channel rgb')
 
 # args for vit
 parser.add_argument('--vit_dim', type=int, default=256, help='vit hidden_dim')
@@ -56,6 +57,7 @@ parser.add_argument('--vit_share', action='store_true', default=False, help='sha
 parser.add_argument('--train_ps', type=int, default=640, help='patch size of training sample')
 parser.add_argument('--tile', type=int, default=None, help='Tile size (e.g 720). None means testing on the original resolution image')
 parser.add_argument('--tile_overlap', type=int, default=32, help='Overlapping of different tiles')
+parser.add_argument('--joint_learning_alpha', type=float, default=0, help='joint learning ratio. loss = loss_shadow * joint_learning_alpha + loss_other * (1 - joint_learning_alpha')
 args = parser.parse_args()
 
 
@@ -102,6 +104,9 @@ with torch.no_grad():
         padw = W - width if width % img_multiple_of != 0 else 0
         rgb_noisy = F.pad(rgb_noisy, (0, padw, 0, padh), 'reflect')
         mask = F.pad(mask, (0, padw, 0, padh), 'reflect')
+        if args.w_hsv:
+            hsv = rgb_to_hsv(rgb_noisy)
+            rgb_noisy = torch.cat((rgb_noisy, hsv), dim=1)
 
         if args.tile is None:
             rgb_restored, _ = model_restoration(rgb_noisy, mask)
