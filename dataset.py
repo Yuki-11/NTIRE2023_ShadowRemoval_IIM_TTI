@@ -318,7 +318,7 @@ class DataLoaderTrainOfficialWarpedJointLearning(Dataset):
 
 ##################################################################################################
 class DataLoaderVal(Dataset):
-    def __init__(self, rgb_dir, target_transform=None, color_space='rgb', mask_dir='mask'):
+    def __init__(self, rgb_dir, target_transform=None, color_space='rgb', mask_dir='mask', opt=None):
         super(DataLoaderVal, self).__init__()
 
         enable_list = ['rgb', 'bray', 'hsv', 'lab', 'luv', 'hls', 'yuv', 'xyz', 'ycrcb']
@@ -350,6 +350,8 @@ class DataLoaderVal(Dataset):
 
         self.tar_size = len(self.clean_filenames)  
 
+        self.opt = opt
+
     def __len__(self):
         return self.tar_size
 
@@ -359,16 +361,20 @@ class DataLoaderVal(Dataset):
 
         clean = torch.from_numpy(np.float32(load_img(self.clean_filenames[tar_index], color_space=self.color_space)))
         noisy = torch.from_numpy(np.float32(load_img(self.noisy_filenames[tar_index], color_space=self.color_space)))
-        mask = load_mask(self.mask_filenames[tar_index])
-        mask = torch.from_numpy(np.float32(mask))
 
         clean_filename = os.path.split(self.clean_filenames[tar_index])[-1]
         noisy_filename = os.path.split(self.noisy_filenames[tar_index])[-1]
-        mask_filename = os.path.split(self.mask_filenames[tar_index])[-1]
 
         clean = clean.permute(2,0,1)
         noisy = noisy.permute(2,0,1)
-        mask = torch.unsqueeze(mask, dim=0)
+
+        if self.opt.joint_learning_alpha:
+            mask = None
+        else:
+            mask = load_mask(self.mask_filenames[tar_index])
+            mask = torch.from_numpy(np.float32(mask))
+            mask_filename = os.path.split(self.mask_filenames[tar_index])[-1]
+            mask = torch.unsqueeze(mask, dim=0)
 
         return clean, noisy, mask, clean_filename, noisy_filename
 
