@@ -24,7 +24,7 @@ from skimage.metrics import structural_similarity as ssim_loss
 from sklearn.metrics import mean_squared_error as mse_loss
 
 parser = argparse.ArgumentParser(description='RGB denoising evaluation on the validation set of SIDD')
-parser.add_argument('--input_dir', default='datasets/official/test/',
+parser.add_argument('--input_dir', default='datasets/official/test_final/',
     type=str, help='Directory of validation images')
 parser.add_argument('--result_dir', default='./results/test',
     type=str, help='Directory for results')
@@ -45,6 +45,7 @@ parser.add_argument('--self_feature_lambda', type=float, default=0, help='weight
 parser.add_argument('--mask_dir',type=str, default='mask_v_mtmt', help='mask directory')
 parser.add_argument('--w_hsv', action='store_true', default=False, help='Add hsv to the input channel rgb')
 parser.add_argument('--joint_learning_alpha', type=float, default=0, help='joint learning ratio. loss = loss_shadow * joint_learning_alpha + loss_other * (1 - joint_learning_alpha')
+parser.add_argument('--mtmt_pretrain_weights',type=str, default='', help='path of mtmt pretrained_weights')
 
 # args for vit
 parser.add_argument('--vit_dim', type=int, default=256, help='vit hidden_dim')
@@ -95,6 +96,9 @@ with torch.no_grad():
         rgb_noisy = data_test[1].cuda()
         mask = data_test[2].cuda()
         filenames = data_test[4]
+        if args.joint_learning_alpha:
+            mask_number_per = None
+            mask_edge = None
 
         # Pad the input if not_multiple_of win_size * 8
         height, width = rgb_noisy.shape[2], rgb_noisy.shape[3]
@@ -109,7 +113,10 @@ with torch.no_grad():
             rgb_noisy = torch.cat((rgb_noisy, hsv), dim=1)
 
         if args.tile is None:
-            rgb_restored, _ = model_restoration(rgb_noisy, mask)
+            if args.joint_learning_alpha:
+                rgb_restored, restored_mask, loss_shadow, _ = model_restoration(rgb_noisy, mask, mask_edge, mask_number_per)
+            else:
+                rgb_restored, _ = model_restoration(rgb_noisy, mask)
         else:
             # test the image tile by tile
             b, c, h, w = rgb_noisy.shape
@@ -138,5 +145,8 @@ with torch.no_grad():
 
         # Unpad the output
         rgb_restored = rgb_restored[:height, :width, :]
+        if args.joint_learning_alpha:
+            mask_pred_save = (restored_mask[0] * 255).detach().cpu().numpy().transpose((1, 2, 0)).astype(np.uint8)
+            utils.save_img(mask_pred_save, os.path.join(args.result_dir, filenames[0]+"-mask_pred.png"))
 
         utils.save_img(rgb_restored*255.0, os.path.join(args.result_dir, filenames[0]), color_space=args.color_space)

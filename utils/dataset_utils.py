@@ -72,7 +72,7 @@ class CutShadow(object):
     alpha : float
         画像をくり抜くサイズのバイアス．
     """
-    def __init__(self, p: float = 1.0, alpha: float = 0.7, ns_s_ratio: float = 0.0, sample_from_s: bool = False):
+    def __init__(self, p: float = 1.0, alpha: float = 0.7, ns_s_ratio: float = 0.0, sample_from_s: bool = False, visualize=False):
         """
         Parameters
         ----------
@@ -89,6 +89,7 @@ class CutShadow(object):
         self.alpha = alpha
         self.ns_s_ratio = ns_s_ratio
         self.sample_from_s = sample_from_s
+        self.visualize = visualize
 
     def __call__(self, clean: torch.Tensor, noisy: torch.Tensor, mask: torch.Tensor)\
             -> Tuple[torch.Tensor, torch.Tensor]:
@@ -110,7 +111,10 @@ class CutShadow(object):
         if np.random.rand(1) >= self.p:
             return noisy, mask
 
+        
         cut_ratio = np.random.randn() * 0.01 + self.alpha
+        if self.visualize: 
+            cut_ratio = self.alpha
         c, h, w = clean.size()
         ch, cw = int(h*cut_ratio), int(w*cut_ratio)
 
@@ -125,6 +129,9 @@ class CutShadow(object):
         else:
             fcy = np.random.randint(0, h-ch+1)
             fcx = np.random.randint(0, w-cw+1)
+            if self.visualize:
+                fcy = 128
+                fcx = 128
 
         if np.random.rand(1) >= self.ns_s_ratio:
             mix_img = clean.detach().clone()
@@ -136,6 +143,127 @@ class CutShadow(object):
             mix_img[:, fcy:fcy+ch, fcx:fcx+cw] = clean[:, fcy:fcy+ch, fcx:fcx+cw]
             mask[fcy:fcy+ch, fcx:fcx+cw] = 0.
             new_mask = mask
+        if self.visualize:
+            border_width = 10
+            mix_img[:, fcy:fcy + border_width, fcx:fcx+cw] = 0
+            mix_img[:, fcy+ch: fcy+ch + border_width, fcx:fcx+cw + border_width] = 0
+            mix_img[:, fcy:fcy+ch, fcx: fcx + border_width] = 0
+            mix_img[:, fcy:fcy+ch + border_width, fcx+cw: fcx+cw + border_width] = 0
+            mix_img[0, fcy:fcy + border_width, fcx:fcx+cw] = 0.9
+            mix_img[0, fcy+ch: fcy+ch + border_width, fcx:fcx+cw + border_width] = 0.9
+            mix_img[0, fcy:fcy+ch, fcx: fcx + border_width] = 0.9
+            mix_img[0, fcy:fcy+ch + border_width, fcx+cw: fcx+cw + border_width] = 0.9
+            new_mask = new_mask.unsqueeze(0)
+            new_mask = new_mask.repeat(3, 1, 1)
+            new_mask[:, fcy:fcy + border_width, fcx:fcx+cw] = 0
+            new_mask[:, fcy+ch: fcy+ch + border_width, fcx:fcx+cw + border_width] = 0
+            new_mask[:, fcy:fcy+ch, fcx: fcx + border_width] = 0
+            new_mask[:, fcy:fcy+ch + border_width, fcx+cw: fcx+cw + border_width] = 0
+            new_mask[0, fcy:fcy + border_width, fcx:fcx+cw] = 0.9
+            new_mask[0, fcy+ch: fcy+ch + border_width, fcx:fcx+cw + border_width] = 0.9
+            new_mask[0, fcy:fcy+ch, fcx: fcx + border_width] = 0.9
+            new_mask[0, fcy:fcy+ch + border_width, fcx+cw: fcx+cw + border_width] = 0.9
+        
+        # radius = 8
+        # color = (1, 0, 0)
+        # mix_img[:, my:my+3, mx:mx+3] = torch.tensor([1., 0., 1.])
+        # mix_img[:, my-radius:my+radius, mx-radius:mx+radius] = torch.tensor(color).view(3, 1, 1)
+        return mix_img, new_mask
+
+
+class CutBlur(object):
+    """
+    CutBlur
+    一部分を影有り画像に変える
+
+    Attributes
+    ----------
+    p : float
+        CutMixを実行する確率．
+    alpha : float
+        画像をくり抜くサイズのバイアス．
+    """
+    def __init__(self, p: float = 1.0, alpha: float = 0.7, ns_s_ratio: float = 0.0, sample_from_s: bool = False, visualize=False):
+        """
+        Parameters
+        ----------
+        p : float
+            CutMixを実行する確率．
+        alpha : float
+            画像をくり抜くサイズのバイアス．
+        ns_s_ratin : float
+            影なしに影あり : 影ありに影なし = (1 - ns_s_ratio) : ns_s_ratio
+        sample_from_s : bool
+            画像をくり抜く際に，影領域が中央に含まれるようにサンプリングする
+        """
+        self.p = p
+        self.alpha = alpha
+        self.ns_s_ratio = ns_s_ratio
+        self.sample_from_s = sample_from_s
+        self.visualize = visualize
+
+    def __call__(self, clean: torch.Tensor, noisy: torch.Tensor, mask: torch.Tensor)\
+            -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Parameters
+        ----------
+        clean : torch.Tensor
+            blur-free image
+        noisy : torch.Tensor
+            blur image
+        mask : torch.Tensor
+            mask of blur image
+    
+        Returns
+        -------
+        Tuple[torch.Tensor, torch.Tensor]
+            mix_img, mask
+        """
+        if np.random.rand(1) >= self.p:
+            return noisy, mask
+
+        
+        cut_ratio = np.random.randn() * 0.01 + self.alpha
+        if self.visualize: 
+            cut_ratio = self.alpha
+        c, h, w = clean.size()
+        ch, cw = int(h*cut_ratio), int(w*cut_ratio)
+
+        if self.sample_from_s:
+            random_mask = mask.detach().clone() * torch.rand(*clean.size()[1:])
+            choice_flatten = random_mask.argmax()
+            fcy, fcx = choice_flatten // w - ch//2, choice_flatten % w - cw//2
+            my, mx = choice_flatten // w, choice_flatten % w
+            # print("中心点xy:", mx, my)
+            fcy, fcx = max(fcy, 0), max(fcx, 0)
+            fcy, fcx = min(fcy, h-ch+1), min(fcx, w-cw+1)
+        else:
+            fcy = np.random.randint(0, h-ch+1)
+            fcx = np.random.randint(0, w-cw+1)
+            if self.visualize:
+                fcy = 128
+                fcx = 128
+
+        if np.random.rand(1) >= self.ns_s_ratio:
+            mix_img = clean.detach().clone()
+            mix_img[:, fcy:fcy+ch, fcx:fcx+cw] = noisy[:, fcy:fcy+ch, fcx:fcx+cw]
+            new_mask = torch.zeros_like(mask)
+            new_mask[fcy:fcy+ch, fcx:fcx+cw] = mask[fcy:fcy+ch, fcx:fcx+cw]
+        else:
+            mix_img = noisy.detach().clone()
+            mix_img[:, fcy:fcy+ch, fcx:fcx+cw] = clean[:, fcy:fcy+ch, fcx:fcx+cw]
+            mask[fcy:fcy+ch, fcx:fcx+cw] = 0.
+            new_mask = mask
+        if self.visualize:
+            border_width = 10
+            mix_img[:, fcy:fcy + border_width, fcx:fcx+cw] = 0
+            mix_img[:, fcy+ch: fcy+ch + border_width, fcx:fcx+cw + border_width] = 0
+            mix_img[:, fcy:fcy+ch, fcx: fcx + border_width] = 0
+            mix_img[:, fcy:fcy+ch + border_width, fcx+cw: fcx+cw + border_width] = 0
+            mix_img[0, fcy:fcy + border_width, fcx:fcx+cw] = 0.9
+            mix_img[0, fcy+ch: fcy+ch + border_width, fcx:fcx+cw + border_width] = 0.9
+            mix_img[0, fcy:fcy+ch, fcx: fcx + border_width] = 0.9
+            mix_img[0, fcy:fcy+ch + border_width, fcx+cw: fcx+cw + border_width] = 0.9
         
         # radius = 8
         # color = (1, 0, 0)

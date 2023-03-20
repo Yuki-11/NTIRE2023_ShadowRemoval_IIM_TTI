@@ -57,9 +57,15 @@ class Options():
         parser.add_argument('--sample_from_s', action='store_true', default=False, help='get pathes from shadow region whem cut shadow')
         parser.add_argument('--joint_learning_alpha', type=float, default=0, help='joint learning ratio. loss = loss_shadow * joint_learning_alpha + loss_other * (1 - joint_learning_alpha')
         parser.add_argument('--wo_wandb', action='store_true', default=False, help='if you dont need wandb')
-        
+        parser.add_argument('--color_aug', action='store_true', default=False, help='color augmentation')
+        parser.add_argument('--color_aug_condition', action=ParamProcessor,
+                            default={'brightness': 0.2, 'contrast': 0.5, 'saturation': 0.5, 'hue': 0.5}, 
+                            help="color augmentation args"
+                            )
+        parser.add_argument('--w_val', action='store_true', default=False, help='train with val dataset')
+
         # MTMT
-        parser.add_argument('--mtmt_pretrain_weights',type=str, default='./mtmt_model/weights/official_fine.pth', help='path of mtmt pretrained_weights')
+        parser.add_argument('--mtmt_pretrain_weights',type=str, default='./mtmt_model/weights/official_fine2.pth', help='path of mtmt pretrained_weights')
         parser.add_argument('--mtmt_edge', type=float, default=10, help='edge learning weight')
         parser.add_argument('--mtmt_subitizing', type=float,  default=1, help='subitizing loss weight')
 

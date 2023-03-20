@@ -1,3 +1,4 @@
+import os
 import torch
 import torch.nn as nn
 import torch.utils.checkpoint as checkpoint
@@ -1184,7 +1185,8 @@ class ShadowFormerJointMTMT(nn.Module):
         super().__init__()
 
         self.mtmt = create_mtmt_model()
-        self.mtmt.load_state_dict(torch.load(opt.mtmt_pretrain_weights))
+        if opt.mtmt_pretrain_weights:
+            self.mtmt.load_state_dict(torch.load(opt.mtmt_pretrain_weights))
 
         self.num_enc_layers = len(depths)//2
         self.num_dec_layers = len(depths)//2

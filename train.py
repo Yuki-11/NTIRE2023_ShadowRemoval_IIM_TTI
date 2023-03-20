@@ -70,6 +70,14 @@ torch.cuda.manual_seed_all(1234)
 ######### Model ###########
 model_restoration = utils.get_arch(opt)
 
+# # parameter count
+# params = 0
+# for p in model_restoration.parameters():
+#     if p.requires_grad:
+#         params += p.numel()
+        
+# print(params)  # 55484461
+
 with open(logname,'a') as f:
     f.write(str(opt)+'\n')
     f.write(str(model_restoration)+'\n')

@@ -1,10 +1,14 @@
 import numpy as np
 import os
+from pathlib import Path
 from torch.utils.data import Dataset
 import torch
 from utils import is_png_file, load_img, load_val_img, load_mask, load_diff, load_val_mask, Augment_RGB_torch
 import torch.nn.functional as F
+import torchvision
+from torchvision.transforms import transforms
 import random
+import cv2
 from utils.dataset_utils import CutShadow
 from mtmt_model.utils.util import cal_subitizing
 
@@ -99,15 +103,25 @@ class DataLoaderTrainOfficialWarped(Dataset):
         # mask_dir = 'mask'
         diff_dir = 'diff'
         
-        clean_files = sorted(os.listdir(os.path.join(rgb_dir, gt_dir)))
-        noisy_files = sorted(os.listdir(os.path.join(rgb_dir, input_dir)))
-        mask_files = sorted(os.listdir(os.path.join(rgb_dir, mask_dir)))
-        diff_files = sorted(os.listdir(os.path.join(rgb_dir, diff_dir)))
-        
-        self.clean_filenames = [os.path.join(rgb_dir, gt_dir, x) for x in clean_files if is_png_file(x)]
-        self.noisy_filenames = [os.path.join(rgb_dir, input_dir, x) for x in noisy_files if is_png_file(x)]
-        self.mask_filenames = [os.path.join(rgb_dir, mask_dir, x) for x in mask_files if is_png_file(x)]
-        self.diff_filenames = [os.path.join(rgb_dir, diff_dir, x) for x in diff_files if is_png_file(x)]
+        # clean_files = sorted(os.listdir(os.path.join(rgb_dir, gt_dir)))
+        # noisy_files = sorted(os.listdir(os.path.join(rgb_dir, input_dir)))
+        # mask_files = sorted(os.listdir(os.path.join(rgb_dir, mask_dir)))
+        # diff_files = sorted(os.listdir(os.path.join(rgb_dir, diff_dir)))
+        self.clean_filenames = sorted(list(map(str, (Path(rgb_dir) / gt_dir).iterdir())))
+        self.noisy_filenames = sorted(list(map(str, (Path(rgb_dir) / input_dir).iterdir())))
+        self.mask_filenames = sorted(list(map(str, (Path(rgb_dir) / mask_dir).iterdir())))
+        self.diff_filenames = sorted(list(map(str, (Path(rgb_dir) / diff_dir).iterdir())))
+        if opt.w_val:
+            val_dir = Path(rgb_dir).parent / 'val'
+            self.clean_filenames.extend(sorted(list(map(str, (val_dir / gt_dir).iterdir()))))
+            self.noisy_filenames.extend(sorted(list(map(str, (val_dir / input_dir).iterdir()))))
+            self.mask_filenames.extend(sorted(list(map(str, (val_dir / mask_dir).iterdir()))))
+            self.diff_filenames.extend(sorted(list(map(str, (val_dir / diff_dir).iterdir()))))
+
+        # self.clean_filenames = [os.path.join(rgb_dir, gt_dir, x) for x in clean_files if is_png_file(x)]
+        # self.noisy_filenames = [os.path.join(rgb_dir, input_dir, x) for x in noisy_files if is_png_file(x)]
+        # self.mask_filenames = [os.path.join(rgb_dir, mask_dir, x) for x in mask_files if is_png_file(x)]
+        # self.diff_filenames = [os.path.join(rgb_dir, diff_dir, x) for x in diff_files if is_png_file(x)]
 
         # それぞれのリストが一致するかどうか確認
         for clean, noisy, mask, diff in zip(self.clean_filenames, self.noisy_filenames, self.mask_filenames, self.diff_filenames):
@@ -121,9 +135,12 @@ class DataLoaderTrainOfficialWarped(Dataset):
         self.tar_size = len(self.clean_filenames)  # get the size of target
 
         self.opt=opt
+        for key, value in self.opt.color_aug_condition.items():
+            self.opt.color_aug_condition[key]= float(value)
         self.cut_shadow = CutShadow(p = self.opt.cut_shadow_ratio, 
                                     ns_s_ratio = self.opt.cut_shadow_ns_s_ratio, 
-                                    sample_from_s = self.opt.sample_from_s)
+                                    sample_from_s = self.opt.sample_from_s,
+                                    visualize = self.opt.visualize)
 
     def __len__(self):
         return self.tar_size
@@ -157,23 +174,38 @@ class DataLoaderTrainOfficialWarped(Dataset):
         else:
             r = np.random.randint(0, H - ps)
             c = np.random.randint(0, W - ps)
+        if self.opt.visualize:
+            r, c = 100, 500
         clean = clean[:, r:r + ps, c:c + ps]
         noisy = noisy[:, r:r + ps, c:c + ps]
         mask = mask[r:r + ps, c:c + ps]
         diff = diff[:, r:r + ps, c:c + ps]
 
+        # colorjitter
+        if self.opt.color_aug:
+            to_pil = transforms.ToPILImage()
+            to_tensor = transforms.ToTensor()
+            color_jitter = transforms.ColorJitter(**self.opt.color_aug_condition)
+            def apply_color_jitter(tensor):
+                pil_image = to_pil(tensor)
+                jittered_image = color_jitter(pil_image)
+                return to_tensor(jittered_image)
+            concatenated_tensor = torch.cat((clean, noisy), dim=2)
+            concatenated_tensor = apply_color_jitter(concatenated_tensor)
+            clean, noisy = torch.chunk(concatenated_tensor, 2, dim=2)
+
         if self.opt.cut_shadow_ratio:
-            noisy, mask = self.cut_shadow(clean, noisy, mask) # cut shadow
+            noisy_, mask = self.cut_shadow(clean, noisy, mask) # cut shadow
 
         apply_trans = transforms_aug[random.getrandbits(3)]
 
-        clean = getattr(augment, apply_trans)(clean)
-        noisy = getattr(augment, apply_trans)(noisy)        
-        mask = getattr(augment, apply_trans)(mask)
-        mask = torch.unsqueeze(mask, dim=0)     
-        diff = getattr(augment, apply_trans)(diff)
-        # diff = torch.unsqueeze(diff, dim=0)
-        return clean, noisy, mask, diff, clean_filename, noisy_filename
+        # clean = getattr(augment, apply_trans)(clean)
+        # noisy_ = getattr(augment, apply_trans)(noisy_)        
+        # mask = getattr(augment, apply_trans)(mask)
+        # mask = torch.unsqueeze(mask, dim=0)     
+        # diff = getattr(augment, apply_trans)(diff)
+        # # diff = torch.unsqueeze(diff, dim=0)
+        return clean, noisy_, mask, diff, clean_filename, noisy#noisy_filename
 
 ##################################################################################################
 class DataLoaderTrainOfficialWarpedJointLearning(Dataset):
@@ -196,15 +228,25 @@ class DataLoaderTrainOfficialWarpedJointLearning(Dataset):
         mask_gt_dir = 'mask_v'
         diff_dir = 'diff'
         
-        clean_files = sorted(os.listdir(os.path.join(rgb_dir, gt_dir)))
-        noisy_files = sorted(os.listdir(os.path.join(rgb_dir, input_dir)))
-        mask_files = sorted(os.listdir(os.path.join(rgb_dir, mask_gt_dir)))
-        diff_files = sorted(os.listdir(os.path.join(rgb_dir, diff_dir)))
+        # clean_files = sorted(os.listdir(os.path.join(rgb_dir, gt_dir)))
+        # noisy_files = sorted(os.listdir(os.path.join(rgb_dir, input_dir)))
+        # mask_files = sorted(os.listdir(os.path.join(rgb_dir, mask_gt_dir)))
+        # diff_files = sorted(os.listdir(os.path.join(rgb_dir, diff_dir)))
+        self.clean_filenames = sorted(list(map(str, (Path(rgb_dir) / gt_dir).iterdir())))
+        self.noisy_filenames = sorted(list(map(str, (Path(rgb_dir) / input_dir).iterdir())))
+        self.mask_filenames = sorted(list(map(str, (Path(rgb_dir) / mask_dir).iterdir())))
+        self.diff_filenames = sorted(list(map(str, (Path(rgb_dir) / diff_dir).iterdir())))
+        if opt.w_val:
+            val_dir = Path(rgb_dir).parent / 'val'
+            self.clean_filenames.extend(sorted(list(map(str, (val_dir / gt_dir).iterdir()))))
+            self.noisy_filenames.extend(sorted(list(map(str, (val_dir / input_dir).iterdir()))))
+            self.mask_filenames.extend(sorted(list(map(str, (val_dir / mask_dir).iterdir()))))
+            self.diff_filenames.extend(sorted(list(map(str, (val_dir / diff_dir).iterdir()))))
         
-        self.clean_filenames = [os.path.join(rgb_dir, gt_dir, x) for x in clean_files if is_png_file(x)]
-        self.noisy_filenames = [os.path.join(rgb_dir, input_dir, x) for x in noisy_files if is_png_file(x)]
-        self.mask_filenames = [os.path.join(rgb_dir, mask_gt_dir, x) for x in mask_files if is_png_file(x)]
-        self.diff_filenames = [os.path.join(rgb_dir, diff_dir, x) for x in diff_files if is_png_file(x)]
+        # self.clean_filenames = [os.path.join(rgb_dir, gt_dir, x) for x in clean_files if is_png_file(x)]
+        # self.noisy_filenames = [os.path.join(rgb_dir, input_dir, x) for x in noisy_files if is_png_file(x)]
+        # self.mask_filenames = [os.path.join(rgb_dir, mask_gt_dir, x) for x in mask_files if is_png_file(x)]
+        # self.diff_filenames = [os.path.join(rgb_dir, diff_dir, x) for x in diff_files if is_png_file(x)]
 
         # それぞれのリストが一致するかどうか確認
         for clean, noisy, mask, diff in zip(self.clean_filenames, self.noisy_filenames, self.mask_filenames, self.diff_filenames):
