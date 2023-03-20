@@ -18,7 +18,8 @@ weights/*
 compare_img.py
 dino_test.py
 gen_diff.py
-viz_dataloader
+viz_dataloader.py
+train_sweep.py
 requirements_.txt
 
 
