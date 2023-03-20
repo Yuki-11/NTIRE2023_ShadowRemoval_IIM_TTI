@@ -193,8 +193,7 @@ for epoch in range(start_epoch, opt.nepoch + 1):
         optimizer.zero_grad()
         target = data[0].cuda()
         input_ = data[1].cuda()
-        if not opt.joint_learning_alpha:
-            mask = data[2].cuda()
+        mask = data[2].cuda()
         if 'official_warped' in opt.train_dir:
             diff = data[3].cuda()
         else:

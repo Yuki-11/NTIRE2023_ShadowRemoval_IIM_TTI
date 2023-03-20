@@ -66,8 +66,11 @@ os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = args.gpus
 
 utils.mkdir(args.result_dir)
+if args.joint_learning_alpha:
+    os.makedirs(f"{args.result_dir}/pred")
+    os.makedirs(f"{args.result_dir}/pred-mask")
 
-test_dataset = get_validation_data(args.input_dir, color_space=args.color_space, mask_dir=args.mask_dir)
+test_dataset = get_validation_data(args.input_dir, color_space=args.color_space, mask_dir=args.mask_dir, opt=args)
 test_loader = DataLoader(dataset=test_dataset, batch_size=1, shuffle=False, num_workers=8, drop_last=False)
 
 model_restoration = utils.get_arch(args)
@@ -94,7 +97,9 @@ with torch.no_grad():
     for ii, data_test in enumerate(tqdm(test_loader), 0):
         rgb_gt = data_test[0].numpy().squeeze().transpose((1, 2, 0))
         rgb_noisy = data_test[1].cuda()
-        mask = data_test[2].cuda()
+        if not args.joint_learning_alpha:
+            mask = data_test[2].cuda()
+            mask = F.pad(mask, (0, padw, 0, padh), 'reflect')
         filenames = data_test[3]
         if args.joint_learning_alpha:
             mask_number_per = None
@@ -107,7 +112,6 @@ with torch.no_grad():
         padh = H - height if height % img_multiple_of != 0 else 0
         padw = W - width if width % img_multiple_of != 0 else 0
         rgb_noisy = F.pad(rgb_noisy, (0, padw, 0, padh), 'reflect')
-        mask = F.pad(mask, (0, padw, 0, padh), 'reflect')
         if args.w_hsv:
             hsv = rgb_to_hsv(rgb_noisy)
             rgb_noisy = torch.cat((rgb_noisy, hsv), dim=1)
@@ -187,7 +191,10 @@ with torch.no_grad():
             utils.save_img(rgb_restored*255.0, os.path.join(args.result_dir, filenames[0]), color_space='rgb') #, color_space=args.color_space)
             if args.joint_learning_alpha:
                 mask_pred_save = (restored_mask[0] * 255).detach().cpu().numpy().transpose((1, 2, 0)).astype(np.uint8)
-                utils.save_img(mask_pred_save, os.path.join(args.result_dir, filenames[0]+"-mask_pred.png"))
+                utils.save_img(mask_pred_save, os.path.join(args.result_dir, "pred-mask", filenames[0]))
+                utils.save_img(rgb_restored*255.0, os.path.join(args.result_dir, "pred", filenames[0]), color_space=args.color_space)
+            else:
+                utils.save_img(rgb_restored*255.0, os.path.join(args.result_dir, filenames[0]), color_space=args.color_space)
 
 if args.cal_metrics:
     psnr_val_rgb = sum(psnr_val_rgb)/len(test_dataset)
