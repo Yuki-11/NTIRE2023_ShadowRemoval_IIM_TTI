@@ -8,7 +8,7 @@ scripts/
 tmp/
 log/
 submit/
-viz_cutshadow/
+viz_dataloader/
 image_registration/
 wandb/
 weights/
@@ -18,7 +18,7 @@ weights/
 compare_img.py
 dino_test.py
 gen_diff.py
-viz_cutshadow
+viz_dataloader
 
 
 ################################################################
