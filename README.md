@@ -29,10 +29,11 @@ pip install -r requirements.txt
 datasets
 └── official
     └── test_final
-        ├── 0000.png
-        ├── 0001.png
-        ├── ...
-        └── 0099.png
+        └── input
+            ├── 0000.png
+            ├── 0001.png
+            ├── ...
+            └── 0099.png
 ```
 
 ### 2. Download weights.
@@ -48,8 +49,8 @@ weights/model_best.pth
 
 ```
 python inference.py \
-  --weights weights/model_best.pth \
-  --result_dir results/model_best \
+  --weights weights/shadow_former+.pth \
+  --result_dir results/shadow_former+ \
   --joint_learning_alpha 1 \
   --gpus 0
 ```
