@@ -12,7 +12,7 @@ viz_dataloader/
 image_registration/
 wandb/
 weights/
-!weights/.gitinore
+!weights/.gitignore
 *.pth
 
 compare_img.py
