@@ -3,13 +3,12 @@ from torch import nn
 
 from . import resnext_101_32x4d_
 from .config import resnext_101_32_path
-resnext_101_32_path = 'mtmt_model/weights/resnext_101_32x4d.pth'
 
 class ResNeXt101(nn.Module):
     def __init__(self):
         super(ResNeXt101, self).__init__()
         net = resnext_101_32x4d_.get_resnext_101_32x4d()
-        net.load_state_dict(torch.load(resnext_101_32_path))
+        # net.load_state_dict(torch.load(resnext_101_32_path))
         net = list(net.children())
         self.layer0 = nn.Sequential(*net[:3])
         self.layer1 = nn.Sequential(*net[3: 5])

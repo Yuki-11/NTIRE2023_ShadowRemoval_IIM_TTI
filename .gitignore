@@ -1,7 +1,7 @@
 env/
 __pycache__/
 compare/
-datasets/
+datasets/*
 !datasets/official/test_final/.gitignore
 results
 scripts/
@@ -11,7 +11,7 @@ submit/
 viz_dataloader/
 image_registration/
 wandb/
-weights/
+weights/*
 !weights/.gitignore
 *.pth
 
