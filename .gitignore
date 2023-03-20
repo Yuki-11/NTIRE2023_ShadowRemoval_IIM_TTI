@@ -3,7 +3,7 @@ __pycache__/
 compare/
 datasets/
 !datasets/official/test_final/.gitignore
-results/
+results
 scripts/
 tmp/
 log/
@@ -19,6 +19,7 @@ compare_img.py
 dino_test.py
 gen_diff.py
 viz_dataloader
+requirements_.txt
 
 
 ################################################################
