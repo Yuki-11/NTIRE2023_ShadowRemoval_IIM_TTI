@@ -4,9 +4,7 @@ This repository is a participation code for the Image Shadow Removal Challenge o
 
 ## ToDo
 
-* weightsのダウンロードリンク
-* 動作確認
-  * 環境構築(requirements.txt, requirements2.txt)
+* weightsのダウンロードリンク追加
 * referencesのライセンス記述
 
 ## Datasets
@@ -14,8 +12,6 @@ datasets were distributed to those who participated in the competition. [Competi
 
 ## Requirement
 * Python>=3.7
-
-[To Do 環境構築確認]
 
 ```bash
 pip install -r requirements.txt
@@ -42,7 +38,7 @@ datasets
 
 Place the files in the 'weights' directory as follows:
 ```
-weights/model_best.pth
+weights/shadow_former+.pth
 ```
 
 ### 3. Run the inference.
@@ -55,7 +51,7 @@ python inference.py \
   --gpus 0
 ```
 
-The results will be output to results/model_best.
+The results will be output to results/shadow_former+.
 
 ## References
 * ShadowFormer

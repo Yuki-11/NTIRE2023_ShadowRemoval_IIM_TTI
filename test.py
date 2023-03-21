@@ -67,8 +67,8 @@ os.environ["CUDA_VISIBLE_DEVICES"] = args.gpus
 
 utils.mkdir(args.result_dir)
 if args.joint_learning_alpha:
-    os.makedirs(f"{args.result_dir}/pred")
-    os.makedirs(f"{args.result_dir}/pred-mask")
+    os.makedirs(f"{args.result_dir}/pred", exist_ok=True)
+    os.makedirs(f"{args.result_dir}/pred-mask", exist_ok=True)
 
 test_dataset = get_validation_data(args.input_dir, color_space=args.color_space, mask_dir=args.mask_dir, opt=args)
 test_loader = DataLoader(dataset=test_dataset, batch_size=1, shuffle=False, num_workers=8, drop_last=False)
@@ -97,9 +97,7 @@ with torch.no_grad():
     for ii, data_test in enumerate(tqdm(test_loader), 0):
         rgb_gt = data_test[0].numpy().squeeze().transpose((1, 2, 0))
         rgb_noisy = data_test[1].cuda()
-        if not args.joint_learning_alpha:
-            mask = data_test[2].cuda()
-            mask = F.pad(mask, (0, padw, 0, padh), 'reflect')
+        mask = data_test[2].cuda()
         filenames = data_test[3]
         if args.joint_learning_alpha:
             mask_number_per = None
@@ -112,6 +110,7 @@ with torch.no_grad():
         padh = H - height if height % img_multiple_of != 0 else 0
         padw = W - width if width % img_multiple_of != 0 else 0
         rgb_noisy = F.pad(rgb_noisy, (0, padw, 0, padh), 'reflect')
+        mask = F.pad(mask, (0, padw, 0, padh), 'reflect')
         if args.w_hsv:
             hsv = rgb_to_hsv(rgb_noisy)
             rgb_noisy = torch.cat((rgb_noisy, hsv), dim=1)
@@ -170,11 +169,13 @@ with torch.no_grad():
             # calculate SSIM in gray space
             gray_restored = cv2.cvtColor(rgb_restored, cv2.COLOR_RGB2GRAY)
             gray_gt = cv2.cvtColor(rgb_gt, cv2.COLOR_RGB2GRAY)
-            ssim_val_rgb.append(ssim_loss(gray_restored, gray_gt, channel_axis=None))
+            ssim = ssim_loss(gray_restored, gray_gt, channel_axis=None)
+            ssim_val_rgb.append(ssim)
             ssim_val_ns.append(ssim_loss(gray_restored * (1 - bm.squeeze()), gray_gt * (1 - bm.squeeze()), channel_axis=None))
             ssim_val_s.append(ssim_loss(gray_restored * bm.squeeze(), gray_gt * bm.squeeze(), channel_axis=None))
 
-            psnr_val_rgb.append(psnr_loss(rgb_restored, rgb_gt))
+            psnr = psnr_loss(rgb_restored, rgb_gt)
+            psnr_val_rgb.append(psnr)
             psnr_val_ns.append(psnr_loss(rgb_restored * (1 - bm), rgb_gt * (1 - bm)))
             psnr_val_s.append(psnr_loss(rgb_restored * bm, rgb_gt * bm))
 
@@ -186,6 +187,7 @@ with torch.no_grad():
                                                                                                    cv2.COLOR_RGB2LAB)).sum() / (1-bm).sum()
             rmse_val_s.append(rmse_temp_s)
             rmse_val_ns.append(rmse_temp_ns)
+            # print(filenames[0], psnr, ssim)
 
         if args.save_images:
             utils.save_img(rgb_restored*255.0, os.path.join(args.result_dir, filenames[0]), color_space='rgb') #, color_space=args.color_space)

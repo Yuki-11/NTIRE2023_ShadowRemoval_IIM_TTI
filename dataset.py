@@ -166,7 +166,7 @@ class DataLoaderTrainOfficialWarped(Dataset):
             r = np.random.randint(0, H - ps)
             c = np.random.randint(0, W - ps)
         if self.opt.visualize:
-            r, c = 100, 500
+            r, c = 0, 500
         clean = clean[:, r:r + ps, c:c + ps]
         noisy = noisy[:, r:r + ps, c:c + ps]
         mask = mask[r:r + ps, c:c + ps]
@@ -190,12 +190,13 @@ class DataLoaderTrainOfficialWarped(Dataset):
 
         apply_trans = transforms_aug[random.getrandbits(3)]
 
-        clean = getattr(augment, apply_trans)(clean)
-        noisy_ = getattr(augment, apply_trans)(noisy_)        
-        mask = getattr(augment, apply_trans)(mask)
-        mask = torch.unsqueeze(mask, dim=0)     
-        diff = getattr(augment, apply_trans)(diff)
-        # diff = torch.unsqueeze(diff, dim=0)
+        if not self.opt.visualize:
+            clean = getattr(augment, apply_trans)(clean)
+            noisy_ = getattr(augment, apply_trans)(noisy_)        
+            mask = getattr(augment, apply_trans)(mask)
+            mask = torch.unsqueeze(mask, dim=0)     
+            diff = getattr(augment, apply_trans)(diff)
+            # diff = torch.unsqueeze(diff, dim=0)
         return clean, noisy_, mask, diff, clean_filename, noisy#noisy_filename
 
 ##################################################################################################
@@ -328,7 +329,7 @@ class DataLoaderVal(Dataset):
         self.clean_filenames = [os.path.join(rgb_dir, gt_dir, x) for x in clean_files if is_png_file(x)]
         self.noisy_filenames = [os.path.join(rgb_dir, input_dir, x) for x in noisy_files if is_png_file(x)]
 
-        if not self.opt.joint_learning_alpha:
+        if not self.opt.joint_learning_alpha or True:
             mask_files = sorted(os.listdir(os.path.join(rgb_dir, mask_dir)))
             self.mask_filenames = [os.path.join(rgb_dir, mask_dir, x) for x in mask_files if is_png_file(x)]
 
@@ -351,8 +352,8 @@ class DataLoaderVal(Dataset):
         clean = clean.permute(2,0,1)
         noisy = noisy.permute(2,0,1)
 
-        if self.opt.joint_learning_alpha:
-            mask = 0
+        if self.opt.joint_learning_alpha and False:
+            mask = torch.zeros(1)
         else:
             mask = load_mask(self.mask_filenames[tar_index])
             mask = torch.from_numpy(np.float32(mask))
@@ -406,7 +407,7 @@ class DataLoaderTest(Dataset):
         noisy = noisy.permute(2,0,1)
 
         if self.opt.joint_learning_alpha:
-            mask = 0
+            mask = torch.zeros(1)
         else:
             mask = load_mask(self.mask_filenames[tar_index])
             mask = torch.from_numpy(np.float32(mask))

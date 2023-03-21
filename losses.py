@@ -200,7 +200,7 @@ class SeamLoss(nn.Module):
     def canny_detection(self, img):
         # NOTE : https://kornia-tutorials.readthedocs.io/en/latest/canny.html
         canny = kornia.filters.Canny()
-        magnitude, edge =canny(img)
+        magnitude, edge = canny(img)
         return edge
 
     def first_derivation(self, img, normalize=True, eps: float = 1e-6):
