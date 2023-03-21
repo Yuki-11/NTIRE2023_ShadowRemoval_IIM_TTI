@@ -2,10 +2,6 @@
 
 This repository is a participation code for the Image Shadow Removal Challenge of the [NTIRE 2023 challenges](https://cvlai.net/ntire/2023/).
 
-## ToDo
-
-* weightsのダウンロードリンク追加
-* referencesのライセンス記述
 
 ## Datasets
 datasets were distributed to those who participated in the competition. [Competition page](https://codalab.lisn.upsaclay.fr/competitions/10253)
@@ -34,7 +30,7 @@ datasets
 
 ### 2. Download weights.
 
-[Download Link]()
+[Download Link](https://drive.google.com/file/d/1I3oGi_ZlMoz5Zc4Mfm5tQY8N50Dh1VR7/view?usp=share_link)
 
 Place the files in the 'weights' directory as follows:
 ```
@@ -54,6 +50,5 @@ python inference.py \
 The results will be output to results/shadow_former+.
 
 ## References
-* ShadowFormer
-* MTMT
-* DiNO
+* [ShadowFormer](https://github.com/GuoLanqing/ShadowFormer)
+* [MTMT](https://github.com/eraserNut/MTMT)
