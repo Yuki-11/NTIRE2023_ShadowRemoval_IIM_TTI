@@ -49,6 +49,11 @@ python inference.py \
 
 The results will be output to results/shadow_former+.
 
+## Training preprocessing
+For the training preprocesing, our proposed method uses SASMA.  
+The code for SASMA is SASMA.ipynb. For more information on SASMA, see the Citation section.
+
+
 ## References
 * [ShadowFormer](https://github.com/GuoLanqing/ShadowFormer)
 * [MTMT](https://github.com/eraserNut/MTMT)
