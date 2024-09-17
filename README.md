@@ -49,6 +49,10 @@ python inference.py \
 
 The results will be output to results/shadow_former+.
 
+## Training preprocessing
+For the training preprocesing , our proposed method# Assume shadow within the range of 40~100 uses SASMA.
+the code for SASMA is SASMA.ipynb. 
+
 ## References
 * [ShadowFormer](https://github.com/GuoLanqing/ShadowFormer)
 * [MTMT](https://github.com/eraserNut/MTMT)
